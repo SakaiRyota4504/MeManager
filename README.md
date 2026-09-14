@@ -29,12 +29,17 @@
 | [docs/01-architecture.md](docs/01-architecture.md) | 技術構成と選定理由、Supabase の使い方 |
 | [docs/02-schedule-requirements.md](docs/02-schedule-requirements.md) | スケジュール管理の要件定義（機能・非機能・データモデル・API・画面） |
 | [docs/03-roadmap.md](docs/03-roadmap.md) | 実装の進め方とステップ |
+| [docs/04-external-feeds.md](docs/04-external-feeds.md) | 外部データの取込API仕様と、football-data.org からの変換 |
 
 ## スケジュール管理の要点
 
 - 予定には**担当者の指定を必須**とし、人単位で絞り込めるようにする
-- Google カレンダー / Outlook の書き出しデータや CSV から**一括登録**できる
-- 一括登録は「バッチ」として記録し、まとめて取り消せる
+- 外部データの取込口を2つ持つ
+  - **フィード同期**: football-data.org のような外部サービスのデータを、
+    別途作る変換プログラムから JSON で送り込み、継続的に反映する
+  - **ファイル取込**: Google カレンダー / Outlook の .ics や、手元の CSV を一括登録する
+- フィード同期は外部キーで照合する upsert とし、
+  キックオフ時刻の確定・延期・中止を何度でも送り直せる
 
 ## 現在のフェーズ
 
