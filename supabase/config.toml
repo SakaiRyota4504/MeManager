@@ -1,0 +1,47 @@
+# Supabase ローカル開発環境の設定
+# 起動: supabase start   停止: supabase stop
+# CLI: https://supabase.com/docs/guides/local-development
+
+project_id = "memanager"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+# ローカルで送信されたメールを受け取る画面（招待リンクの確認に使う）
+[inbucket]
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+# ローカルでは確認メールを挟まずに動かす。本番では true にする。
+enable_confirmations = false
+secure_password_change = false
+
+[analytics]
+enabled = false

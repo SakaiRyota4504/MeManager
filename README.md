@@ -46,9 +46,57 @@
   自動化は作らず、そのぶん毎月の繰り返し操作を短くすることに手をかける
   （取り込み設定を「プリセット」として保存し、次回はファイルを渡すだけにする）
 
+## 開発
+
+### 必要なもの
+
+- Node.js 22 以降
+- pnpm 10 以降（`corepack enable` で有効にできる）
+- Docker と [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
+
+### 手順
+
+```bash
+pnpm install
+
+# Supabase のローカル環境を起動する（初回は Docker イメージの取得に時間がかかる）
+supabase start
+
+# 表示された API URL と anon key を .env.local に書き写す
+cp .env.example .env.local
+
+pnpm dev
+```
+
+http://localhost:3000 を開くと、セットアップの状態が表示される。
+
+### コマンド
+
+| コマンド | 内容 |
+| --- | --- |
+| `pnpm dev` | 開発サーバーの起動 |
+| `pnpm build` | 本番ビルド |
+| `pnpm lint` | ESLint |
+| `pnpm typecheck` | 型チェック |
+| `pnpm format` | Prettier での整形（Markdown は対象外） |
+| `pnpm check` | lint・型チェック・整形確認をまとめて実行 |
+| `pnpm --filter web gen:types` | Supabase のスキーマから TypeScript の型を生成 |
+
+### ディレクトリ
+
+```
+apps/web/           … Next.js アプリ（ウェブ・デスクトップ共通の画面）
+  src/app/          … 画面とRoute Handler
+  src/lib/supabase/ … Supabase クライアント
+  src/proxy.ts      … セッション更新（Next.js 16 で middleware.ts から改名）
+supabase/           … DBスキーマ（migrations/）とローカル環境の設定
+docs/               … 要件定義と設計
+```
+
 ## 現在のフェーズ
 
-要件定義。実装コードはまだ存在しない。
+[ロードマップ](docs/03-roadmap.md) の **Step 0（土台づくり）が完了**。
+次は Step 1（認証と家族・メンバー）。
 
 未決定事項は [docs/02-schedule-requirements.md](docs/02-schedule-requirements.md) の
 「13. 要確認事項」にまとめてある。

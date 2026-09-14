@@ -1,0 +1,9 @@
+node_modules/
+.next/
+out/
+build/
+pnpm-lock.yaml
+supabase/.temp/
+
+# 日本語の表組みが崩れるため、ドキュメントは対象外にする
+*.md

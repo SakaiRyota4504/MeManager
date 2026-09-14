@@ -1,0 +1,34 @@
+# 依存関係
+node_modules/
+.pnpm-store/
+
+# ビルド成果物
+.next/
+out/
+build/
+dist/
+
+# 環境変数
+.env
+.env.local
+.env*.local
+
+# Supabase のローカル環境
+supabase/.branches/
+supabase/.temp/
+
+# エディタ・OS
+.DS_Store
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ログ
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
