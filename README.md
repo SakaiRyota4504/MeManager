@@ -81,6 +81,14 @@ http://localhost:3000 を開くと、セットアップの状態が表示され�
 | `pnpm format` | Prettier での整形（Markdown は対象外） |
 | `pnpm check` | lint・型チェック・整形確認をまとめて実行 |
 | `pnpm --filter web gen:types` | Supabase のスキーマから TypeScript の型を生成 |
+| `supabase/tests/run.sh` | マイグレーションと RLS の検証（PostgreSQL が必要） |
+
+### RLS の検証
+
+`supabase/tests/run.sh` は、使い捨てのデータベースにマイグレーションを流し、
+別の家族のデータが見えないことなどを確認する。
+Supabase CLI（Docker）が無くても、PostgreSQL さえあれば動く。
+CI でも毎回実行している。
 
 ### ディレクトリ
 
@@ -95,8 +103,11 @@ docs/               … 要件定義と設計
 
 ## 現在のフェーズ
 
-[ロードマップ](docs/03-roadmap.md) の **Step 0（土台づくり）が完了**。
-次は Step 1（認証と家族・メンバー）。
+[ロードマップ](docs/03-roadmap.md) の **Step 1（認証と家族・メンバー）まで実装済み**。
+次は Step 2（予定の基本機能）。
+
+サインアップ・ログイン・招待リンク・メンバー一覧が動く。
+DB スキーマと RLS は `supabase/tests/run.sh` で検証済み。
 
 未決定事項は [docs/02-schedule-requirements.md](docs/02-schedule-requirements.md) の
 「13. 要確認事項」にまとめてある。
