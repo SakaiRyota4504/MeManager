@@ -45,10 +45,12 @@ export type Invitation = {
   id: string;
   family_id: string;
   token_hash: string;
+  email: string | null;
   member_id: string | null;
   created_by: string | null;
   expires_at: string;
   accepted_at: string | null;
+  revoked_at: string | null;
   created_at: string;
 };
 
@@ -86,6 +88,7 @@ export type Database = {
       create_invitation: {
         Args: {
           target_family_id: string;
+          target_email?: string | null;
           target_member_id?: string | null;
           valid_days?: number;
         };
@@ -93,11 +96,40 @@ export type Database = {
       };
       peek_invitation: {
         Args: { token: string };
-        Returns: { family_name: string; is_valid: boolean }[];
+        Returns: {
+          family_name: string;
+          is_valid: boolean;
+          requires_email: boolean;
+          email_hint: string | null;
+        }[];
       };
       accept_invitation: {
         Args: { token: string };
         Returns: string;
+      };
+      revoke_invitation: {
+        Args: { invitation_id: string };
+        Returns: void;
+      };
+      is_bootstrap: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      add_offline_member: {
+        Args: { target_family_id: string; name: string };
+        Returns: string;
+      };
+      deactivate_member: {
+        Args: { target_member_id: string };
+        Returns: void;
+      };
+      reactivate_member: {
+        Args: { target_member_id: string };
+        Returns: void;
+      };
+      set_member_role: {
+        Args: { target_member_id: string; new_role: string };
+        Returns: void;
       };
     };
     Enums: Record<string, never>;

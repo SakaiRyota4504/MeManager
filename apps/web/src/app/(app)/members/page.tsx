@@ -1,68 +1,94 @@
 import { requireSession } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { InvitePanel } from "./invite-panel";
+import { AddMemberPanel } from "./add-member-panel";
+import { MemberRow } from "./member-row";
+import { PendingInvitations } from "./pending-invitations";
 
 export const dynamic = "force-dynamic";
-
-const ROLE_LABEL: Record<string, string> = {
-  admin: "管理者",
-  member: "メンバー",
-  viewer: "閲覧のみ",
-};
 
 export default async function MembersPage() {
   const session = await requireSession();
   const supabase = await createClient();
+  const isAdmin = session.member.role === "admin";
 
   // RLS により、自分の家族のメンバーだけが返る。
   // family_id での絞り込みを書かなくても他の家族は見えない。
-  const { data: members } = await supabase
+  const { data: allMembers } = await supabase
     .from("members")
     .select("*")
-    .eq("is_active", true)
     .order("created_at");
 
-  const isAdmin = session.member.role === "admin";
+  const active = allMembers?.filter((m) => m.is_active) ?? [];
+  const inactive = allMembers?.filter((m) => !m.is_active) ?? [];
+
+  // 招待の一覧は管理者しか読めない（RLS）。
+  const { data: invitations } = isAdmin
+    ? await supabase
+        .from("invitations")
+        .select("*")
+        .is("accepted_at", null)
+        .is("revoked_at", null)
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+    : { data: null };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <section className="space-y-4">
         <div>
           <h1 className="text-xl font-bold">{session.family.name}</h1>
-          <p className="text-sm text-muted">
-            {members?.length ?? 0} 人のメンバー
-          </p>
+          <p className="text-sm text-muted">{active.length} 人のメンバー</p>
         </div>
 
         <ul className="divide-y divide-border rounded-lg border border-border">
-          {members?.map((member) => (
-            <li
+          {active.map((member) => (
+            <MemberRow
               key={member.id}
-              className="flex items-center justify-between gap-3 px-4 py-3"
-            >
-              <span className="flex items-center gap-2.5">
-                <span
-                  aria-hidden
-                  className="inline-block size-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: member.color }}
-                />
-                <span className="text-sm font-medium">
-                  {member.display_name}
-                </span>
-                {member.id === session.member.id && (
-                  <span className="text-xs text-muted">（自分）</span>
-                )}
-              </span>
-              <span className="flex items-center gap-2 text-xs text-muted">
-                {member.user_id === null && <span>アカウント未登録</span>}
-                <span>{ROLE_LABEL[member.role] ?? member.role}</span>
-              </span>
-            </li>
+              member={member}
+              isSelf={member.id === session.member.id}
+              canManage={isAdmin}
+            />
           ))}
         </ul>
+
+        {!isAdmin && (
+          <p className="text-xs text-muted">
+            メンバーの追加や削除は、家族の管理者だけが行えます。
+          </p>
+        )}
       </section>
 
-      {isAdmin && <InvitePanel familyId={session.family.id} />}
+      {isAdmin && (
+        <>
+          <AddMemberPanel familyId={session.family.id} />
+          <InvitePanel familyId={session.family.id} />
+          {invitations && invitations.length > 0 && (
+            <PendingInvitations invitations={invitations} />
+          )}
+        </>
+      )}
+
+      {inactive.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold">外したメンバー</h2>
+            <p className="mt-1 text-sm text-muted">
+              過去の予定の担当者として残っています。データは見られません。
+            </p>
+          </div>
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {inactive.map((member) => (
+              <MemberRow
+                key={member.id}
+                member={member}
+                isSelf={false}
+                canManage={isAdmin}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

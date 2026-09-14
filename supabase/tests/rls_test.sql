@@ -65,13 +65,44 @@ select pg_temp.expect(
   '既定カレンダー「家族共有」が作られる'
 );
 
--- 別の家族も作っておく（漏れの検証用）
-insert into auth.users (id, email, raw_user_meta_data)
-values (
-  '22222222-2222-2222-2222-222222222222',
-  'other@example.com',
-  '{"display_name": "他人", "family_name": "よその家"}'::jsonb
+select pg_temp.expect(
+  not public.is_bootstrap(),
+  '家族ができたら、以後は招待なしでアカウントを作れない状態になる'
 );
+
+-- 招待なしのサインアップは拒否される
+do $$
+begin
+  begin
+    insert into auth.users (id, email, raw_user_meta_data)
+    values ('99999999-9999-9999-9999-999999999999', 'stranger@example.com',
+            '{"display_name": "知らない人"}'::jsonb);
+    raise exception 'FAILED: 招待なしでアカウントが作れてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   招待なしではアカウントを作れない';
+  end;
+end
+$$;
+select pg_temp.expect(
+  (select count(*) from auth.users
+   where email = 'stranger@example.com') = 0,
+  '拒否されたサインアップは auth.users にも残らない'
+);
+
+-- 別の家族は、検証のためトリガーを一時的に外して作る。
+-- （本番ではそもそも2つ目の家族を作る導線が無い）
+alter table auth.users disable trigger on_auth_user_created;
+insert into auth.users (id, email) values
+  ('22222222-2222-2222-2222-222222222222', 'other@example.com');
+alter table auth.users enable trigger on_auth_user_created;
+
+insert into public.families (id, name)
+values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'よその家');
+insert into public.members (family_id, user_id, display_name, role)
+values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        '22222222-2222-2222-2222-222222222222', '他人', 'admin');
 
 \echo '--- 2. 招待リンクから参加できる ---'
 
@@ -90,6 +121,10 @@ select 'family_b', (select family_id::text from public.members
 select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
 insert into t_ctx
 select 'token', public.create_invitation((select v from t_ctx where k = 'family_a')::uuid);
+-- メールアドレスを指定した招待も作る（転送されても他人は使えないことの確認用）
+insert into t_ctx
+select 'token_bound', public.create_invitation(
+  (select v from t_ctx where k = 'family_a')::uuid, 'haha2@example.com');
 reset role;
 
 select pg_temp.expect(
@@ -135,24 +170,29 @@ select pg_temp.expect(
 );
 select pg_temp.expect(
   (select accepted_at is not null from public.invitations
-   where family_id = (select v from t_ctx where k = 'family_a')::uuid),
-  '招待は使用済みになる'
+   where token_hash = encode(sha256((select v from t_ctx where k = 'token')::bytea), 'hex')),
+  '使った招待は使用済みになる'
 );
 
--- 同じトークンは二度使えない
-insert into auth.users (id, email, raw_user_meta_data)
-values (
-  '44444444-4444-4444-4444-444444444444',
-  'again@example.com',
-  json_build_object('display_name', '再利用',
-                    'invitation_token', (select v from t_ctx where k = 'token'))::jsonb
-);
-select pg_temp.expect(
-  (select family_id::text from public.members
-   where user_id = '44444444-4444-4444-4444-444444444444')
-  <> (select v from t_ctx where k = 'family_a'),
-  '使用済みトークンでは参加できない（自分の家族が作られる）'
-);
+-- 同じトークンは二度使えない（招待必須なので、サインアップ自体が失敗する）
+do $$
+begin
+  begin
+    insert into auth.users (id, email, raw_user_meta_data)
+    values (
+      '44444444-4444-4444-4444-444444444444',
+      'again@example.com',
+      json_build_object('display_name', '再利用',
+                        'invitation_token', (select v from t_ctx where k = 'token'))::jsonb
+    );
+    raise exception 'FAILED: 使用済みトークンで参加できてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   使用済みトークンでは参加できない';
+  end;
+end
+$$;
 
 select pg_temp.expect(
   (select count(distinct color) from public.members
@@ -237,6 +277,153 @@ select pg_temp.expect(
   (select count(*) from updated) = 0,
   '一般メンバーは他人の行を更新できない'
 );
+
+\echo '--- 5. 招待はメールアドレスに紐付けられる ---'
+
+reset role;
+
+-- 宛先違いのメールアドレスでは使えない
+do $$
+begin
+  begin
+    insert into auth.users (id, email, raw_user_meta_data)
+    values ('55555555-5555-5555-5555-555555555555', 'betsujin@example.com',
+            json_build_object('display_name', '別人',
+                              'invitation_token',
+                              (select v from t_ctx where k = 'token_bound'))::jsonb);
+    raise exception 'FAILED: 宛先違いでも招待が使えてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   リンクが転送されても、宛先以外は使えない';
+  end;
+end
+$$;
+
+-- 宛先どおりなら使える
+insert into auth.users (id, email, raw_user_meta_data)
+values ('66666666-6666-6666-6666-666666666666', 'haha2@example.com',
+        json_build_object('display_name', '母2',
+                          'invitation_token',
+                          (select v from t_ctx where k = 'token_bound'))::jsonb);
+select pg_temp.expect(
+  (select family_id::text from public.members
+   where user_id = '66666666-6666-6666-6666-666666666666')
+  = (select v from t_ctx where k = 'family_a'),
+  '宛先どおりのメールアドレスなら参加できる'
+);
+
+\echo '--- 6. 管理者がメンバーを増減できる ---'
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+
+-- アカウントを持たないメンバーを足せる
+insert into t_ctx
+select 'child', public.add_offline_member(
+  (select v from t_ctx where k = 'family_a')::uuid, 'たろう');
+select pg_temp.expect(
+  (select user_id is null and is_active from public.members
+   where id = (select v from t_ctx where k = 'child')::uuid),
+  'アカウントを持たないメンバーを追加できる'
+);
+
+-- メンバーを外すと、その人からはデータが見えなくなる
+insert into t_ctx
+select 'haha', (select id::text from public.members
+                where user_id = '33333333-3333-3333-3333-333333333333');
+select public.deactivate_member((select v from t_ctx where k = 'haha')::uuid);
+reset role;
+
+select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
+select pg_temp.expect(
+  (select count(*) from public.families) = 0,
+  '外されたメンバーからは家族が見えなくなる'
+);
+select pg_temp.expect(
+  (select count(*) from public.members) = 0,
+  '外されたメンバーからはメンバー一覧も見えなくなる'
+);
+reset role;
+
+-- 一般メンバーはメンバーを外せない
+select pg_temp.login_as('66666666-6666-6666-6666-666666666666');
+do $$
+begin
+  begin
+    perform public.deactivate_member((select v from t_ctx where k = 'child')::uuid);
+    raise exception 'FAILED: 一般メンバーがメンバーを外せてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   一般メンバーはメンバーを外せない';
+  end;
+end
+$$;
+reset role;
+
+-- 管理者が自分ひとりのときは、自分を外せない
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+do $$
+declare v_me uuid;
+begin
+  select id into v_me from public.members
+  where user_id = '11111111-1111-1111-1111-111111111111';
+  begin
+    perform public.deactivate_member(v_me);
+    raise exception 'FAILED: 自分自身を外せてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   自分自身は外せない';
+  end;
+end
+$$;
+
+-- 外したメンバーは戻せる
+select public.reactivate_member((select v from t_ctx where k = 'haha')::uuid);
+reset role;
+select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
+select pg_temp.expect(
+  (select count(*) from public.families) = 1,
+  '戻したメンバーからは再び家族が見える'
+);
+reset role;
+
+\echo '--- 7. 招待は使われる前に取り消せる ---'
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+insert into t_ctx
+select 'token_revoke', public.create_invitation(
+  (select v from t_ctx where k = 'family_a')::uuid);
+insert into t_ctx
+select 'inv_revoke', (select id::text from public.invitations
+                      where token_hash = encode(
+                        sha256((select v from t_ctx where k = 'token_revoke')::bytea), 'hex'));
+select public.revoke_invitation((select v from t_ctx where k = 'inv_revoke')::uuid);
+reset role;
+
+select pg_temp.expect(
+  not (select is_valid from public.peek_invitation(
+         (select v from t_ctx where k = 'token_revoke'))),
+  '取り消した招待は無効になる'
+);
+
+do $$
+begin
+  begin
+    insert into auth.users (id, email, raw_user_meta_data)
+    values ('77777777-7777-7777-7777-777777777777', 'revoked@example.com',
+            json_build_object('display_name', '取消後',
+                              'invitation_token',
+                              (select v from t_ctx where k = 'token_revoke'))::jsonb);
+    raise exception 'FAILED: 取り消した招待が使えてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   取り消した招待では参加できない';
+  end;
+end
+$$;
 
 reset role;
 rollback;

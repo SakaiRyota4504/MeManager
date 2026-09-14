@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { createInvitation, type InviteState } from "./actions";
-import { FormError, SubmitButton } from "@/components/form";
+import { Field, FormError, SubmitButton } from "@/components/form";
 
 export function InvitePanel({ familyId }: { familyId: string }) {
   const [state, formAction] = useActionState<InviteState, FormData>(
@@ -19,22 +19,32 @@ export function InvitePanel({ familyId }: { familyId: string }) {
       <div>
         <h2 className="text-sm font-semibold">家族を招待する</h2>
         <p className="mt-1 text-sm text-muted">
-          リンクを発行して渡してください。有効期限は7日間です。
+          このアプリは招待がないとアカウントを作れません。
+          リンクを発行して、招待したい人に渡してください。有効期限は7日間です。
         </p>
       </div>
 
-      <form action={formAction} className="space-y-3">
+      <form action={formAction} className="flex flex-wrap items-end gap-3">
         <FormError
           message={state && "error" in state ? state.error : undefined}
         />
         <input type="hidden" name="family_id" value={familyId} />
-        <div className="max-w-xs">
+        <div className="min-w-56 flex-1">
+          <Field
+            label="宛先のメールアドレス"
+            name="email"
+            type="email"
+            placeholder="haha@example.com"
+            hint="指定すると、このアドレスでしか使えなくなります。リンクが転送されても他人は参加できません"
+          />
+        </div>
+        <div className="w-44">
           <SubmitButton pendingText="発行中…">招待リンクを発行</SubmitButton>
         </div>
       </form>
 
       {url && (
-        <div className="space-y-2">
+        <div className="space-y-2 border-t pt-4">
           <p className="text-xs text-muted">
             このリンクは一度しか表示されません。今すぐ控えてください。
           </p>
@@ -43,7 +53,7 @@ export function InvitePanel({ familyId }: { familyId: string }) {
               readOnly
               value={url}
               onFocus={(e) => e.currentTarget.select()}
-              className="flex-1 rounded-md border border-border px-3 py-2 font-mono text-xs"
+              className="min-w-0 flex-1 rounded-md border border-border px-3 py-2 font-mono text-xs"
             />
             <button
               type="button"

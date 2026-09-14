@@ -43,6 +43,7 @@ export default async function InvitePage(props: PageProps<"/invite/[token]">) {
     <InviteForms
       token={token}
       familyName={invitation.family_name}
+      emailHint={invitation.requires_email ? invitation.email_hint : null}
       signedInAs={session?.member.display_name ?? null}
     />
   );

@@ -31,6 +31,16 @@
 | [docs/03-roadmap.md](docs/03-roadmap.md) | 実装の進め方とステップ |
 | [docs/04-csv-format.md](docs/04-csv-format.md) | 取り込みCSVの形式と、football-data.org からのCSVの作り方 |
 
+## 利用者の管理
+
+- **アカウントは招待がないと作れない。** 家族だけで使うアプリなので、
+  知らない人がアカウントを持てないよう入口を閉じている
+  - 例外は最初の1人だけ。家族がまだ無いときに限り、招待なしで登録できる
+  - 招待リンクには宛先のメールアドレスを指定でき、転送されても他人は使えない
+  - 未使用の招待は、使われる前に取り消せる
+- 管理者はメンバーを外せる。外した時点でその人からはデータが見えなくなる
+- アカウントを持たない家族（小さいお子さんなど）もメンバーとして登録できる
+
 ## スケジュール管理の要点
 
 - 予定には**担当者の指定を必須**とし、人単位で絞り込めるようにする
@@ -62,8 +72,12 @@ pnpm install
 # Supabase のローカル環境を起動する（初回は Docker イメージの取得に時間がかかる）
 supabase start
 
-# 表示された API URL と anon key を .env.local に書き写す
+# 表示された API URL / anon key / service_role key を .env.local に書き写す
+# service_role key はアカウントの作成に必要（サーバー側でのみ使う）
 cp .env.example .env.local
+
+# マイグレーションを適用する
+supabase db reset
 
 pnpm dev
 ```
@@ -106,8 +120,8 @@ docs/               … 要件定義と設計
 [ロードマップ](docs/03-roadmap.md) の **Step 1（認証と家族・メンバー）まで実装済み**。
 次は Step 2（予定の基本機能）。
 
-サインアップ・ログイン・招待リンク・メンバー一覧が動く。
-DB スキーマと RLS は `supabase/tests/run.sh` で検証済み。
+ログイン・招待リンクの発行と取り消し・メンバーの追加と削除が動く。
+DB スキーマと RLS は `supabase/tests/run.sh` で検証済み（33項目）。
 
 未決定事項は [docs/02-schedule-requirements.md](docs/02-schedule-requirements.md) の
 「13. 要確認事項」にまとめてある。

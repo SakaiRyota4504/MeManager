@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, hasServiceRoleKey } from "@/lib/supabase/admin";
 
 export type FormState = { error: string } | null;
 
@@ -22,6 +23,16 @@ function toJapaneseMessage(message: string): string {
   }
   if (/Password should be at least/i.test(message)) {
     return `パスワードは${PASSWORD_MIN_LENGTH}文字以上にしてください`;
+  }
+  // DB のトリガーが投げる印。公開サインアップを止めた最後の砦。
+  if (/INVITATION_REQUIRED/.test(message)) {
+    return "アカウントの作成には招待が必要です。家族の管理者に招待リンクを発行してもらってください";
+  }
+  if (/INVITATION_INVALID/.test(message)) {
+    return "招待が使えません。期限切れ・使用済みか、宛先のメールアドレスが違います";
+  }
+  if (/Signups not allowed/i.test(message)) {
+    return "アカウントの作成には招待が必要です";
   }
   return message;
 }
@@ -64,24 +75,49 @@ export async function signUp(
       error: `パスワードは${PASSWORD_MIN_LENGTH}文字以上にしてください`,
     };
   }
+  if (!hasServiceRoleKey()) {
+    return {
+      error: "サーバーの設定が足りません（SUPABASE_SERVICE_ROLE_KEY が未設定）",
+    };
+  }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
+
+  // 招待が無い場合に作れるのは、まだ家族が1つも無いとき（最初の1人）だけ。
+  // ここで弾くのは分かりやすいエラーを出すため。実際の強制は DB のトリガー。
+  if (!invitationToken) {
+    const { data: isBootstrap } = await supabase.rpc("is_bootstrap");
+    if (!isBootstrap) {
+      return {
+        error:
+          "アカウントの作成には招待が必要です。家族の管理者に招待リンクを発行してもらってください",
+      };
+    }
+  }
+
+  // 公開サインアップは止めてあるので、管理APIでユーザーを作る。
+  // 招待の検証は DB のトリガーが行い、条件を満たさなければ作成ごと失敗する。
+  const admin = createAdminClient();
+  const { error: createError } = await admin.auth.admin.createUser({
     email,
     password,
-    options: {
-      // 家族とメンバーの作成は、このメタデータを見て DB のトリガーが行う。
-      // アプリ側で複数回に分けて書き込むと、途中で失敗したときに
-      // 中途半端な状態が残る。
-      data: {
-        display_name: displayName,
-        family_name: familyName || undefined,
-        invitation_token: invitationToken || undefined,
-      },
+    // 家族内で使うため、確認メールは挟まない。
+    email_confirm: true,
+    user_metadata: {
+      display_name: displayName,
+      family_name: familyName || undefined,
+      invitation_token: invitationToken || undefined,
     },
   });
 
-  if (error) return { error: toJapaneseMessage(error.message) };
+  if (createError) return { error: toJapaneseMessage(createError.message) };
+
+  // 作成しただけではログイン状態にならないので、続けてサインインする。
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (signInError) return { error: toJapaneseMessage(signInError.message) };
 
   revalidatePath("/", "layout");
   redirect("/members");
