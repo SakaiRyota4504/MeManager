@@ -70,16 +70,25 @@ Supabase（データの置き場）と Vercel（アプリの置き場）を、
 
 ### 1-4. 接続情報を控える
 
-左の **Project Settings** → **API** を開く。3つ使う。
+左の **Project Settings** → **API Keys** を開く。使うのは3つだけ。
 
-| 画面の表記 | あとで貼る名前 |
-| --- | --- |
-| Project URL | `NEXT_PUBLIC_SUPABASE_URL` |
-| anon public | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
-| service_role | `SUPABASE_SERVICE_ROLE_KEY` |
+**鍵の名前は、プロジェクトを作った時期で2通りある。どちらでも動く。**
+2025年以降に作ったプロジェクトは新しい表記になっていることが多い。
 
-**service_role はすべてのデータを操作できる鍵。** 人に見せない。
-チャットやメールに貼らない。
+| 用途 | 新しい表記 | 古い表記 | 設定する名前 |
+| --- | --- | --- | --- |
+| URL | Project URL | Project URL | `NEXT_PUBLIC_SUPABASE_URL` |
+| ブラウザ用の鍵 | **Publishable key**（`sb_publishable_…`） | **anon public** | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+| サーバー用の鍵 | **Secret key**（`sb_secret_…`） | **service_role** | `SUPABASE_SERVICE_ROLE_KEY` |
+
+Secret key は最初は隠れている。**Reveal** を押すと出る。
+
+**3つ目の鍵はすべてのデータを操作できる。** 人に見せない。
+チャットやメールに貼らない。GitHub に入れない。
+
+> ブラウザ用の鍵（1つ目）は公開されて構わない。
+> これで何ができるかは RLS が決めていて、
+> 他の家族のデータは取れないようになっている。
 
 ---
 
@@ -106,9 +115,15 @@ Supabase（データの置き場）と Vercel（アプリの置き場）を、
 
 | Name | Value |
 | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon public |
-| `SUPABASE_SERVICE_ROLE_KEY` | service_role |
+| `NEXT_PUBLIC_SUPABASE_URL` | Project URL（`https://xxxx.supabase.co`） |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Publishable key（または anon public） |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret key（または service_role） |
+
+名前は**1文字も間違えない**（大文字小文字も含めて）。
+`NEXT_PUBLIC_` の付け外しを間違えると動かない。
+
+Environment は **Production / Preview / Development** の3つとも
+チェックを入れたままでよい。
 
 **Deploy** を押す。2〜3分でURLが出る。
 
