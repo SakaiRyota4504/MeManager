@@ -34,6 +34,7 @@
 | [docs/02-schedule-requirements.md](docs/02-schedule-requirements.md) | スケジュール管理の要件定義（機能・非機能・データモデル・API・画面） |
 | [docs/03-roadmap.md](docs/03-roadmap.md) | 実装の進め方とステップ |
 | [docs/04-csv-format.md](docs/04-csv-format.md) | 取り込みCSVの形式と、football-data.org からのCSVの作り方 |
+| [docs/prototypes/](docs/prototypes/) | 実装前に操作感を確かめた試作画面 |
 
 ## 利用者の管理
 
@@ -126,6 +127,9 @@ docs/               … 要件定義と設計
 
 ログイン・招待リンクの発行と取り消し・メンバーの追加と削除が動く。
 DB スキーマと RLS は `supabase/tests/run.sh` で検証済み（33項目）。
+
+カレンダー画面は [試作](docs/prototypes/calendar.html)で操作感を確認済み。
+実装は要件定義の9章（画面）に従う。
 
 未決定事項は [docs/02-schedule-requirements.md](docs/02-schedule-requirements.md) の
 「13. 要確認事項」にまとめてある。
