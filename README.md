@@ -73,12 +73,12 @@
 | 家族が使えるか | 使える | 自分のPCだけ |
 
 **実際に使い始めるなら A。** Docker も CLI も要らない。
-`supabase/bundle.sh` がマイグレーションを1つのSQLにまとめるので、
-それを Supabase の SQL Editor に貼り付ければテーブルができる。
+テーブルは [`supabase/schema.sql`](supabase/schema.sql) を
+Supabase の SQL Editor に貼り付けるだけで作れる。
 
 ```bash
 pnpm install
-supabase/bundle.sh > schema.sql   # 中身を SQL Editor に貼る
+# supabase/schema.sql の中身を Supabase の SQL Editor に貼って Run
 cp .env.example .env.local        # Supabase の画面から3つの値を書き写す
 pnpm dev
 ```
@@ -98,7 +98,7 @@ http://localhost:3000 を開くと、セットアップの状態が表示され�
 | `pnpm check` | lint・型チェック・整形確認・テストをまとめて実行 |
 | `pnpm --filter web gen:types` | Supabase のスキーマから TypeScript の型を生成 |
 | `supabase/tests/run.sh` | マイグレーションと RLS の検証（PostgreSQL が必要） |
-| `supabase/bundle.sh` | マイグレーションを1ファイルにまとめる（貼り付け用。CLI 不要） |
+| `supabase/bundle.sh` | `supabase/schema.sql` を作り直す（migrations を変えたとき） |
 
 ### RLS の検証
 

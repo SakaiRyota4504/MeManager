@@ -24,23 +24,24 @@
 
 ### A-2. テーブルを作る
 
-ここが CLI の代わり。**SQL を1回貼り付けるだけ**で済む。
+ここが CLI の代わり。**用意してある SQL を1回貼り付けるだけ**で済む。
 
-まず、このリポジトリで次を実行して1つのファイルにまとめる。
-
-```bash
-supabase/bundle.sh > schema.sql
-```
-
-できた `schema.sql` の中身を全部コピーし、
-Supabase の画面左の **SQL Editor** に貼り付けて **Run** を押す。
+1. リポジトリの **[`supabase/schema.sql`](../supabase/schema.sql)** を開く
+2. 中身を**全部**コピーする
+3. Supabase の画面左の **SQL Editor** を開く
+4. 貼り付けて **Run**（または `Ctrl/Cmd + Enter`）
 
 「Success. No rows returned」と出れば完了。
 左の **Table Editor** に `families` `members` `calendars` `events`
 `event_assignees` の5つのテーブルが見えるはず。
 
-> `schema.sql` は生成物なので Git には入れない。
-> テーブルを変えたいときは `supabase/migrations/` を直してから作り直す。
+> 全体が `begin;` 〜 `commit;` で囲んであるので、
+> 途中で失敗しても中途半端なテーブルは残らない。やり直せばよい。
+
+> `schema.sql` は `supabase/migrations/` から機械的に作った写し。
+> **手で書き換えない。** テーブルを変えたいときは migrations 側を直し、
+> `supabase/bundle.sh > supabase/schema.sql` で作り直す
+> （ずれていると CI が失敗する）。
 
 ### A-3. 勝手にアカウントを作られないようにする
 

@@ -64,5 +64,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 貼り付け用の schema.sql が最新か確認する
+        run: |
+          supabase/bundle.sh > /tmp/schema.sql
+          if ! diff -q supabase/schema.sql /tmp/schema.sql > /dev/null; then
+            echo "supabase/schema.sql が migrations/ とずれています。"
+            echo "supabase/bundle.sh > supabase/schema.sql で作り直してください。"
+            diff supabase/schema.sql /tmp/schema.sql | head -40
+            exit 1
+          fi
+
       - name: マイグレーションと RLS を検証する
         run: supabase/tests/run.sh
