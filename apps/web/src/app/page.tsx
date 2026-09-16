@@ -26,19 +26,16 @@ export default async function Home() {
       </header>
 
       {connected ? (
-        <div className="flex gap-3">
+        <div className="space-y-3">
           <Link
             href="/login"
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white"
+            className="inline-block rounded-md bg-accent px-4 py-2 text-sm font-medium text-white"
           >
             ログイン
           </Link>
-          <Link
-            href="/signup"
-            className="rounded-md border border-border px-4 py-2 text-sm font-medium"
-          >
-            アカウントを作る
-          </Link>
+          <p className="text-xs text-muted">
+            アカウントは家族の管理者が用意します。この画面から作ることはできません。
+          </p>
         </div>
       ) : (
         <section className="space-y-4 rounded-lg border border-border p-5">
@@ -64,20 +61,17 @@ export default async function Home() {
           <div className="space-y-2 border-t border-dashed pt-4 text-sm text-muted">
             <p className="font-medium text-foreground">次にやること</p>
             <ol className="list-inside list-decimal space-y-1">
+              <li>Supabase でプロジェクトを作る</li>
               <li>
-                <code className="text-xs">supabase start</code>{" "}
-                でローカル環境を起動する
+                <code className="text-xs">supabase/schema.sql</code> を SQL
+                Editor に貼り付けて実行する
               </li>
-              <li>
-                表示された URL と anon key を{" "}
-                <code className="text-xs">.env.local</code> に書く
-              </li>
-              <li>
-                <code className="text-xs">supabase db reset</code>{" "}
-                でマイグレーションを適用する
-              </li>
-              <li>開発サーバーを再起動する</li>
+              <li>接続情報3つを、この置き場の環境変数に入れる</li>
+              <li>入れ直したら、もう一度この画面を開く</li>
             </ol>
+            <p className="text-xs">
+              手順は <code className="text-xs">docs/05-setup.md</code> にある。
+            </p>
           </div>
         </section>
       )}

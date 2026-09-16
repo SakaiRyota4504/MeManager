@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState } from "react";
 
 import { signIn, type FormState } from "@/lib/auth/actions";
@@ -30,11 +29,9 @@ export default function LoginPage() {
         <SubmitButton pendingText="ログイン中…">ログイン</SubmitButton>
       </form>
 
-      <p className="text-center text-sm text-muted">
-        はじめて使う場合は{" "}
-        <Link href="/signup" className="text-accent underline">
-          アカウントを作る
-        </Link>
+      <p className="text-center text-xs text-muted">
+        アカウントは家族の管理者が用意します。
+        ログインできないときは管理者に確認してください。
       </p>
     </div>
   );

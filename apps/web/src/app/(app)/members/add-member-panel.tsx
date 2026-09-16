@@ -64,10 +64,18 @@ export function AddMemberPanel({ familyId }: { familyId: string }) {
               label="パスワード"
               name="password"
               type="password"
-              required
               autoComplete="new-password"
-              hint="8文字以上"
+              hint="8文字以上。空のままにすると、ここではアカウントを作りません"
             />
+            <p className="text-xs text-muted">
+              パスワードを空にした場合は、上のメールアドレスを
+              <strong className="font-medium text-foreground">
+                この人の枠として登録するだけ
+              </strong>
+              です。Supabase の Authentication
+              で同じアドレスのユーザーを作ると、
+              その時点でこの人としてログインできるようになります。
+            </p>
           </div>
         )}
 

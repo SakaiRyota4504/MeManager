@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 
 import type { Member } from "@/lib/supabase/types";
@@ -8,6 +8,7 @@ import {
   deactivateMember,
   enableLogin,
   reactivateMember,
+  renameMember,
   type ActionState,
 } from "./actions";
 import { Field, FormError, SubmitButton } from "@/components/form";
@@ -38,9 +39,29 @@ export function MemberRow({
     null,
   );
   const [opening, setOpening] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | undefined>(undefined);
+  const [, startTransition] = useTransition();
+
+  // 成功したら畳む。useActionState ではなくここで結果を受けるのは、
+  // 「閉じる」という状態の変更が結果に付いてくるため。
+  function submitRename(formData: FormData) {
+    startTransition(async () => {
+      const result = await renameMember(null, formData);
+      if (result && "error" in result) {
+        setRenameError(result.error);
+      } else {
+        setRenameError(undefined);
+        setRenaming(false);
+      }
+    });
+  }
 
   const canEnableLogin =
     canManage && member.is_active && member.user_id === null;
+  const canRename = canManage || isSelf;
+  // メールアドレスだけ登録してある人。Supabase 側でユーザーを作れば使えるようになる。
+  const waitingForAccount = member.user_id === null && member.login_email;
 
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
@@ -59,8 +80,24 @@ export function MemberRow({
       </span>
 
       <span className="flex items-center gap-3 text-xs text-muted">
-        {member.user_id === null && <span>ログインなし</span>}
+        {waitingForAccount ? (
+          <span title="Supabase の Authentication で、このアドレスのユーザーを作るとログインできます">
+            {member.login_email} を待っています
+          </span>
+        ) : (
+          member.user_id === null && <span>ログインなし</span>
+        )}
         <span>{ROLE_LABEL[member.role] ?? member.role}</span>
+
+        {canRename && !renaming && (
+          <button
+            type="button"
+            onClick={() => setRenaming(true)}
+            className="underline"
+          >
+            名前を変える
+          </button>
+        )}
 
         {canEnableLogin && !opening && (
           <button
@@ -84,6 +121,34 @@ export function MemberRow({
         <p role="alert" className="w-full text-xs text-red-600">
           {state.error}
         </p>
+      )}
+
+      {renaming && (
+        <form
+          action={submitRename}
+          className="flex w-full flex-wrap items-end gap-2"
+        >
+          <input type="hidden" name="member_id" value={member.id} />
+          <div className="w-48">
+            <Field
+              label="表示名"
+              name="display_name"
+              required
+              defaultValue={member.display_name}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setRenaming(false)}
+            className="rounded-md border border-border px-3 py-2 text-sm"
+          >
+            やめる
+          </button>
+          <div className="w-28">
+            <SubmitButton pendingText="変更中…">変える</SubmitButton>
+          </div>
+          <FormError message={renameError} />
+        </form>
       )}
 
       {opening && (

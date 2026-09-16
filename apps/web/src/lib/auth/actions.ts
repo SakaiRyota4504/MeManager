@@ -1,10 +1,17 @@
 "use server";
 
+/**
+ * ログインとログアウト。**アカウントを作る操作はここには無い。**
+ *
+ * アカウントを用意するのは家族の管理者だけで、
+ * メンバー画面（`/members`）か Supabase の管理画面から行う。
+ * 迷い込んだ人が自分で作れる口は、どこにも置かない。
+ */
+
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient, hasServiceRoleKey } from "@/lib/supabase/admin";
 
 export type FormState = { error: string } | null;
 
@@ -24,16 +31,6 @@ function toJapaneseMessage(message: string): string {
   if (/Password should be at least/i.test(message)) {
     return `パスワードは${PASSWORD_MIN_LENGTH}文字以上にしてください`;
   }
-  // DB のトリガーが投げる印。公開サインアップを止めた最後の砦。
-  if (/MEMBER_REQUIRED/.test(message)) {
-    return "アカウントは家族の管理者が登録します。管理者に追加してもらってください";
-  }
-  if (/MEMBER_NOT_AVAILABLE/.test(message)) {
-    return "このメンバーにはログインを設定できません";
-  }
-  if (/Signups not allowed/i.test(message)) {
-    return "アカウントは家族の管理者が登録します";
-  }
   return message;
 }
 
@@ -52,60 +49,6 @@ export async function signIn(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) return { error: toJapaneseMessage(error.message) };
-
-  revalidatePath("/", "layout");
-  redirect("/calendar");
-}
-
-export async function signUp(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const email = String(formData.get("email") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
-  const displayName = String(formData.get("display_name") ?? "").trim();
-  const familyName = String(formData.get("family_name") ?? "").trim();
-
-  if (!email || !password || !displayName) {
-    return { error: "表示名・メールアドレス・パスワードを入力してください" };
-  }
-  if (password.length < PASSWORD_MIN_LENGTH) {
-    return {
-      error: `パスワードは${PASSWORD_MIN_LENGTH}文字以上にしてください`,
-    };
-  }
-  if (!hasServiceRoleKey()) {
-    return {
-      error: "サーバーの設定が足りません（SUPABASE_SERVICE_ROLE_KEY が未設定）",
-    };
-  }
-
-  const supabase = await createClient();
-
-  // これは最初の1人（家族を作る人）専用。2人目以降は管理者が /members から登録する。
-  // 公開サインアップは止めてあるので管理APIでユーザーを作り、
-  // 「家族がまだ無いか」の判定は DB のトリガーが行う。
-  // 家族がすでにあれば、作成ごと失敗する。
-  const admin = createAdminClient();
-  const { error: createError } = await admin.auth.admin.createUser({
-    email,
-    password,
-    // 家族内で使うため、確認メールは挟まない。
-    email_confirm: true,
-    user_metadata: {
-      display_name: displayName,
-      family_name: familyName || undefined,
-    },
-  });
-
-  if (createError) return { error: toJapaneseMessage(createError.message) };
-
-  // 作成しただけではログイン状態にならないので、続けてサインインする。
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-  if (signInError) return { error: toJapaneseMessage(signInError.message) };
 
   revalidatePath("/", "layout");
   redirect("/calendar");

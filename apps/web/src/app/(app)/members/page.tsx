@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { AddMemberPanel } from "./add-member-panel";
+import { FamilyName } from "./family-name";
 import { MemberRow } from "./member-row";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +24,12 @@ export default async function MembersPage() {
   return (
     <div className="space-y-10">
       <section className="space-y-4">
-        <div>
-          <h1 className="text-xl font-bold">{session.family.name}</h1>
+        <div className="space-y-1">
+          <FamilyName
+            familyId={session.family.id}
+            name={session.family.name}
+            canManage={isAdmin}
+          />
           <p className="text-sm text-muted">{active.length} 人のメンバー</p>
         </div>
 

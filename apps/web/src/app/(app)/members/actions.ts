@@ -30,14 +30,16 @@ function toJapaneseMessage(message: string): string {
 }
 
 /**
- * メンバーを登録する。
+ * メンバーを登録する。入力の組み合わせで3通りになる。
  *
- * メールアドレスとパスワードを入れた場合は、そのメンバーにログイン用の
- * アカウントも作る。入れない場合は、予定の担当者として名前だけを登録する
- * （小さいお子さんなど）。
+ *   名前だけ            … 予定の担当者として登録する（小さいお子さんなど）
+ *   名前 + メール       … ログインの枠だけ用意する。
+ *                         Supabase の管理画面で同じアドレスのユーザーを作ると、
+ *                         このメンバーとしてログインできるようになる
+ *   名前 + メール + PW  … ここでアカウントまで作る（Supabase を開かなくてよい）
  *
- * アカウントは必ず「先に用意したメンバー」に紐付く。
- * 招待リンクのように、こちらが用意していない枠が増えることはない。
+ * どの道でもアカウントは「先に用意したメンバー」に紐付く。
+ * こちらが用意していない枠にアカウントが増えることはない。
  */
 export async function addMember(
   _prev: ActionState,
@@ -51,30 +53,33 @@ export async function addMember(
   if (!familyId) return { error: "家族が特定できません" };
   if (!name) return { error: "表示名を入力してください" };
 
-  const wantsAccount = Boolean(email || password);
-  if (wantsAccount && (!email || !password)) {
-    return {
-      error:
-        "ログインを設定するには、メールアドレスとパスワードの両方が必要です",
-    };
+  if (password && !email) {
+    return { error: "パスワードを決めるには、メールアドレスも必要です" };
   }
-  if (wantsAccount && password.length < PASSWORD_MIN_LENGTH) {
+  if (password && password.length < PASSWORD_MIN_LENGTH) {
     return {
       error: `パスワードは${PASSWORD_MIN_LENGTH}文字以上にしてください`,
     };
   }
 
-  const supabase = await createClient();
-
-  // ログインなしのメンバーは、これだけで終わり。
-  if (!wantsAccount) {
+  // パスワードを決めないときは、ここではアカウントを作らない。
+  // メールアドレスがあれば「この人はこのアドレスでログインする」という枠だけ残し、
+  // 実際のユーザー作成は Supabase の管理画面に任せる。
+  if (!password) {
+    const supabase = await createClient();
     const { error } = await supabase.rpc("add_offline_member", {
       target_family_id: familyId,
       name,
+      login_email: email || null,
     });
     if (error) return { error: toJapaneseMessage(error.message) };
     revalidatePath("/members");
-    return { ok: true, message: `${name} を追加しました` };
+    return {
+      ok: true,
+      message: email
+        ? `${name} を追加しました。Supabase で ${email} のユーザーを作ると、この人としてログインできます`
+        : `${name} を追加しました`,
+    };
   }
 
   return attachAccount(familyId, null, name, email, password);
@@ -177,5 +182,66 @@ export async function reactivateMember(
   if (error) return { error: toJapaneseMessage(error.message) };
 
   revalidatePath("/members");
+  return { ok: true };
+}
+
+/**
+ * 表示名を変える。
+ *
+ * Supabase の管理画面で作った1人目は、表示名がメールアドレスの
+ * `@` より前になる。あとから直せないと困るので用意してある。
+ * 更新できる範囲は RLS とトリガーが決める（本人か管理者、表示名と色だけ）。
+ */
+export async function renameMember(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const memberId = String(formData.get("member_id") ?? "");
+  const name = String(formData.get("display_name") ?? "").trim();
+
+  if (!memberId) return { error: "メンバーが特定できません" };
+  if (!name) return { error: "表示名を入力してください" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("members")
+    .update({ display_name: name })
+    .eq("id", memberId)
+    .select("id");
+
+  if (error) return { error: toJapaneseMessage(error.message) };
+  if (!data || data.length === 0) {
+    return { error: "この人の表示名を変える権限がありません" };
+  }
+
+  revalidatePath("/members");
+  revalidatePath("/calendar");
+  return { ok: true };
+}
+
+/** 家族の名前を変える。管理者だけ（RLS で決まる）。 */
+export async function renameFamily(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const familyId = String(formData.get("family_id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+
+  if (!familyId) return { error: "家族が特定できません" };
+  if (!name) return { error: "家族の名前を入力してください" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("families")
+    .update({ name })
+    .eq("id", familyId)
+    .select("id");
+
+  if (error) return { error: toJapaneseMessage(error.message) };
+  if (!data || data.length === 0) {
+    return { error: "家族の名前を変える権限がありません" };
+  }
+
+  revalidatePath("/", "layout");
   return { ok: true };
 }

@@ -29,6 +29,8 @@ export type Member = {
   role: MemberRole;
   timezone: string;
   is_active: boolean;
+  /** ログインに使うアドレス。Supabase 側で同じアドレスのユーザーを作ると紐付く */
+  login_email: string | null;
 } & Timestamps;
 
 export type EventStatus = "confirmed" | "tentative" | "cancelled";
@@ -151,8 +153,16 @@ export type Database = {
         Returns: boolean;
       };
       add_offline_member: {
-        Args: { target_family_id: string; name: string };
+        Args: {
+          target_family_id: string;
+          name: string;
+          login_email?: string | null;
+        };
         Returns: string;
+      };
+      set_member_login_email: {
+        Args: { target_member_id: string; email: string | null };
+        Returns: void;
       };
       deactivate_member: {
         Args: { target_member_id: string };

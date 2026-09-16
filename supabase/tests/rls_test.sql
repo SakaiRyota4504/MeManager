@@ -1,10 +1,10 @@
 -- RLS の検証。
 --
 -- 確かめること:
---   1. サインアップで家族・メンバー・既定カレンダーが自動で作られる
---   2. 招待リンクから参加すると、招待元の家族のメンバーになる
+--   1. 最初の1人で家族・メンバー・既定カレンダーが自動で作られる
+--   2. 管理者が用意した枠にしかアカウントが紐付かない
 --   3. 別の家族のデータは、IDを直接指定しても取得できない
---   4. 権限のない操作（他人の家族の招待発行など）が弾かれる
+--   4. 権限のない操作（他人の家族のメンバー登録など）が弾かれる
 --
 -- 実行: supabase/tests/run.sh
 
@@ -263,6 +263,38 @@ select pg_temp.expect(
   (select count(*) from updated) = 0,
   '一般メンバーは他人の行を更新できない'
 );
+
+-- 自分の行でも、役割は書き換えられない（更新ポリシーは列まで絞れないので
+-- トリガーで塞いでいる）
+do $$
+begin
+  begin
+    update public.members set role = 'admin'
+    where user_id = '33333333-3333-3333-3333-333333333333';
+    raise exception 'FAILED: 自分を管理者に昇格できてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   自分を管理者に昇格できない';
+  end;
+end
+$$;
+
+-- 自分の行を別の家族に付け替えて、よその家のデータを読むこともできない
+do $$
+begin
+  begin
+    update public.members
+    set family_id = (select v from t_ctx where k = 'family_b')::uuid
+    where user_id = '33333333-3333-3333-3333-333333333333';
+    raise exception 'FAILED: 自分を別の家族に移せてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   自分を別の家族に移せない';
+  end;
+end
+$$;
 reset role;
 
 \echo '--- 5. 管理者がメンバーを増減できる ---'
@@ -338,6 +370,90 @@ select pg_temp.expect(
   '戻したメンバーからは再び家族が見える'
 );
 
+reset role;
+
+\echo '--- 5b. Supabase の管理画面から作ったアカウント ---'
+
+-- 管理者が「この人はこのアドレスでログインする」と先に登録しておく。
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+insert into t_ctx
+select 'jiro', public.add_offline_member(
+  (select v from t_ctx where k = 'family_a')::uuid, 'じろう', 'Jiro@Example.com')::text;
+reset role;
+
+select pg_temp.expect(
+  (select login_email from public.members
+   where id = (select v from t_ctx where k = 'jiro')::uuid) = 'jiro@example.com',
+  'メールアドレスは小文字にそろえて登録される'
+);
+
+-- Supabase の管理画面には metadata を入れる欄が無いので、
+-- メールアドレスとパスワードだけでユーザーが作られる。
+insert into auth.users (id, email)
+values ('77777777-7777-7777-7777-777777777777', 'jiro@example.com');
+
+select pg_temp.expect(
+  (select user_id = '77777777-7777-7777-7777-777777777777'
+   from public.members where id = (select v from t_ctx where k = 'jiro')::uuid),
+  '登録しておいたメンバーにアカウントが紐付く'
+);
+select pg_temp.expect(
+  (select display_name from public.members
+   where user_id = '77777777-7777-7777-7777-777777777777') = 'じろう',
+  '表示名は登録しておいたものが残る（メールアドレスから作らない）'
+);
+select pg_temp.expect(
+  (select count(*) from public.members
+   where family_id = (select v from t_ctx where k = 'family_a')::uuid) = 4,
+  'メンバーは増えない（枠は事前に作った分だけ）'
+);
+
+-- 登録していないアドレスでは、管理画面から作ってもアカウントにならない
+do $$
+begin
+  begin
+    insert into auth.users (id, email)
+    values ('88888888-8888-8888-8888-888888888888', 'nobody@example.com');
+    raise exception 'FAILED: 登録していないアドレスでアカウントが作れた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   登録していないアドレスではアカウントを作れない';
+  end;
+end
+$$;
+
+-- 同じアドレスを2人のメンバーに登録できない（どちらに紐付くか決まらなくなる）
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+do $$
+begin
+  begin
+    perform public.add_offline_member(
+      (select v from t_ctx where k = 'family_a')::uuid, '重複', 'jiro@example.com');
+    raise exception 'FAILED: 同じアドレスを2人に登録できてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   同じメールアドレスは2人に登録できない';
+  end;
+end
+$$;
+
+-- 一般メンバーはメールアドレスを登録できない
+select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
+do $$
+begin
+  begin
+    perform public.set_member_login_email(
+      (select v from t_ctx where k = 'child')::uuid, 'sneak@example.com');
+    raise exception 'FAILED: 一般メンバーがログイン用のアドレスを登録できた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   一般メンバーはログイン用のアドレスを登録できない';
+  end;
+end
+$$;
 reset role;
 
 \echo '--- 6. 予定の登録 ---'
