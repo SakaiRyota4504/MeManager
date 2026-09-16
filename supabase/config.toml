@@ -21,7 +21,7 @@ enabled = true
 port = 54323
 api_url = "http://127.0.0.1"
 
-# ローカルで送信されたメールを受け取る画面（招待リンクの確認に使う）
+# ローカルで送信されたメールを受け取る画面
 [inbucket]
 enabled = true
 port = 54324
@@ -33,8 +33,8 @@ additional_redirect_urls = ["http://127.0.0.1:3000"]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10
-# 公開サインアップは止める。アカウントの作成はアプリ側が招待を検証したうえで
-# 管理APIで行う。知らない人がアカウントを作れないようにするため。
+# 公開サインアップは止める。アカウントの作成は、管理者が用意したメンバーに
+# 紐付ける形でのみアプリが管理APIで行う。知らない人がアカウントを作れないようにするため。
 enable_signup = false
 enable_anonymous_sign_ins = false
 

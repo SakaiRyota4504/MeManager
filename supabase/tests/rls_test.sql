@@ -67,7 +67,7 @@ select pg_temp.expect(
 
 select pg_temp.expect(
   not public.is_bootstrap(),
-  '家族ができたら、以後は招待なしでアカウントを作れない状態になる'
+  '家族ができたら、以後は勝手にアカウントを作れない状態になる'
 );
 
 -- 招待なしのサインアップは拒否される
@@ -77,122 +77,140 @@ begin
     insert into auth.users (id, email, raw_user_meta_data)
     values ('99999999-9999-9999-9999-999999999999', 'stranger@example.com',
             '{"display_name": "知らない人"}'::jsonb);
-    raise exception 'FAILED: 招待なしでアカウントが作れてしまった';
+    raise exception 'FAILED: 管理者の登録なしでアカウントが作れてしまった';
   exception
     when sqlstate 'P0001' then
       if sqlerrm like 'FAILED%' then raise; end if;
-      raise notice '  ok   招待なしではアカウントを作れない';
+      raise notice '  ok   管理者が登録していない人はアカウントを作れない';
   end;
 end
 $$;
 select pg_temp.expect(
   (select count(*) from auth.users
    where email = 'stranger@example.com') = 0,
-  '拒否されたサインアップは auth.users にも残らない'
+  '拒否されたアカウント作成は auth.users にも残らない'
 );
 
--- 別の家族は、検証のためトリガーを一時的に外して作る。
--- （本番ではそもそも2つ目の家族を作る導線が無い）
-alter table auth.users disable trigger on_auth_user_created;
-insert into auth.users (id, email) values
-  ('22222222-2222-2222-2222-222222222222', 'other@example.com');
-alter table auth.users enable trigger on_auth_user_created;
+\echo '--- 2. 管理者が登録したメンバーだけがアカウントを持てる ---'
 
-insert into public.families (id, name)
-values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'よその家');
-insert into public.members (family_id, user_id, display_name, role)
-values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-        '22222222-2222-2222-2222-222222222222', '他人', 'admin');
-
-\echo '--- 2. 招待リンクから参加できる ---'
-
--- ロールを切り替えても読めるようにしておく（テスト用の値の受け渡しに使う）。
 create temporary table t_ctx (k text primary key, v text);
 grant select, insert on t_ctx to authenticated;
 
 insert into t_ctx
 select 'family_a', (select family_id::text from public.members
                     where user_id = '11111111-1111-1111-1111-111111111111');
-insert into t_ctx
-select 'family_b', (select family_id::text from public.members
-                    where user_id = '22222222-2222-2222-2222-222222222222');
 
--- 父として招待を発行する
+-- 父（管理者）がメンバーを用意する
 select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
 insert into t_ctx
-select 'token', public.create_invitation((select v from t_ctx where k = 'family_a')::uuid);
--- メールアドレスを指定した招待も作る（転送されても他人は使えないことの確認用）
-insert into t_ctx
-select 'token_bound', public.create_invitation(
-  (select v from t_ctx where k = 'family_a')::uuid, 'haha2@example.com');
+select 'haha_member', public.prepare_member_for_account(
+  (select v from t_ctx where k = 'family_a')::uuid, '母')::text;
 reset role;
 
 select pg_temp.expect(
-  (select length(v) from t_ctx where k = 'token') = 64,
-  '招待トークンは64文字（244bit相当の乱数）'
-);
-select pg_temp.expect(
-  (select count(*) from public.invitations
-   where token_hash = (select v from t_ctx where k = 'token')) = 0,
-  'トークンの平文はDBに保存されない'
+  (select user_id is null and is_active and display_name = '母'
+   from public.members where id = (select v from t_ctx where k = 'haha_member')::uuid),
+  '管理者がメンバーを登録できる（アカウントはまだ無い）'
 );
 
--- 招待の下見（未ログインでも家族名が見える）
-select pg_temp.expect(
-  (select family_name from public.peek_invitation((select v from t_ctx where k = 'token'))) = 'さかい家'
-  and (select is_valid from public.peek_invitation((select v from t_ctx where k = 'token'))),
-  '招待リンクから家族名を確認できる'
-);
-
--- 招待トークン付きでサインアップ
+-- そのメンバーにアカウントを紐付ける（アプリは管理APIでこれを行う）
 insert into auth.users (id, email, raw_user_meta_data)
-values (
-  '33333333-3333-3333-3333-333333333333',
-  'haha@example.com',
-  json_build_object('display_name', '母',
-                    'invitation_token', (select v from t_ctx where k = 'token'))::jsonb
-);
+values ('33333333-3333-3333-3333-333333333333', 'haha@example.com',
+        json_build_object('display_name', '母',
+                          'member_id', (select v from t_ctx where k = 'haha_member'))::jsonb);
 
 select pg_temp.expect(
-  (select family_id::text from public.members
-   where user_id = '33333333-3333-3333-3333-333333333333')
-  = (select v from t_ctx where k = 'family_a'),
-  '招待された人は招待元の家族に入る（新しい家族は作られない）'
+  (select user_id = '33333333-3333-3333-3333-333333333333'
+   from public.members where id = (select v from t_ctx where k = 'haha_member')::uuid),
+  '用意したメンバーにアカウントが紐付く'
 );
 select pg_temp.expect(
-  (select count(*) from public.families) = 2,
-  '家族は2つのまま'
+  (select count(*) from public.members
+   where family_id = (select v from t_ctx where k = 'family_a')::uuid) = 2,
+  'メンバーは増えない（枠は事前に作った分だけ）'
 );
 select pg_temp.expect(
-  (select role from public.members
-   where user_id = '33333333-3333-3333-3333-333333333333') = 'member',
-  '招待された人は一般メンバー'
-);
-select pg_temp.expect(
-  (select accepted_at is not null from public.invitations
-   where token_hash = encode(sha256((select v from t_ctx where k = 'token')::bytea), 'hex')),
-  '使った招待は使用済みになる'
+  (select count(*) from public.families) = 1,
+  '新しい家族は作られない'
 );
 
--- 同じトークンは二度使えない（招待必須なので、サインアップ自体が失敗する）
+-- 同じメンバーに2つ目のアカウントは紐付かない
 do $$
 begin
   begin
     insert into auth.users (id, email, raw_user_meta_data)
-    values (
-      '44444444-4444-4444-4444-444444444444',
-      'again@example.com',
-      json_build_object('display_name', '再利用',
-                        'invitation_token', (select v from t_ctx where k = 'token'))::jsonb
-    );
-    raise exception 'FAILED: 使用済みトークンで参加できてしまった';
+    values ('44444444-4444-4444-4444-444444444444', 'dup@example.com',
+            json_build_object('display_name', '重複',
+                              'member_id', (select v from t_ctx where k = 'haha_member'))::jsonb);
+    raise exception 'FAILED: 同じメンバーに2つ目のアカウントが付いた';
   exception
     when sqlstate 'P0001' then
       if sqlerrm like 'FAILED%' then raise; end if;
-      raise notice '  ok   使用済みトークンでは参加できない';
+      raise notice '  ok   1人のメンバーにアカウントは1つだけ';
   end;
 end
 $$;
+
+-- 存在しないメンバーを指定しても作れない
+do $$
+begin
+  begin
+    insert into auth.users (id, email, raw_user_meta_data)
+    values ('55555555-5555-5555-5555-555555555555', 'ghost@example.com',
+            '{"display_name":"幽霊","member_id":"00000000-0000-0000-0000-000000000000"}'::jsonb);
+    raise exception 'FAILED: 存在しないメンバーでアカウントが作れた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   存在しないメンバーではアカウントを作れない';
+  end;
+end
+$$;
+
+-- 一般メンバーはメンバーを登録できない
+select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
+do $$
+begin
+  begin
+    perform public.prepare_member_for_account(
+      (select v from t_ctx where k = 'family_a')::uuid, '勝手に追加');
+    raise exception 'FAILED: 一般メンバーがメンバーを登録できた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   一般メンバーはメンバーを登録できない';
+  end;
+end
+$$;
+reset role;
+
+-- 別の家族のメンバーは登録できない
+insert into t_ctx select 'family_b', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+alter table auth.users disable trigger on_auth_user_created;
+insert into auth.users (id, email) values
+  ('22222222-2222-2222-2222-222222222222', 'other@example.com');
+alter table auth.users enable trigger on_auth_user_created;
+insert into public.families (id, name)
+values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'よその家');
+insert into public.members (family_id, user_id, display_name, role)
+values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        '22222222-2222-2222-2222-222222222222', '他人', 'admin');
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+do $$
+begin
+  begin
+    perform public.prepare_member_for_account(
+      'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid, '侵入');
+    raise exception 'FAILED: 別の家族にメンバーを登録できた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   別の家族にはメンバーを登録できない';
+  end;
+end
+$$;
+reset role;
 
 select pg_temp.expect(
   (select count(distinct color) from public.members
@@ -223,42 +241,10 @@ select pg_temp.expect(
   '別の家族のカレンダーは見えない'
 );
 
-\echo '--- 4. 権限のない操作が弾かれる ---'
-
--- 別の家族の招待を発行しようとする
-do $$
-declare v_other uuid;
-begin
-  select v::uuid into v_other from t_ctx where k = 'family_b';
-  begin
-    perform public.create_invitation(v_other);
-    raise exception 'FAILED: 別の家族の招待を発行できてしまった';
-  exception
-    when sqlstate 'P0001' then
-      if sqlerrm like 'FAILED%' then raise; end if;
-      raise notice '  ok   別の家族の招待は発行できない';
-  end;
-end
-$$;
-
--- 一般メンバーは招待を発行できない
-select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
-do $$
-declare v_mine uuid;
-begin
-  select v::uuid into v_mine from t_ctx where k = 'family_a';
-  begin
-    perform public.create_invitation(v_mine);
-    raise exception 'FAILED: 一般メンバーが招待を発行できてしまった';
-  exception
-    when sqlstate 'P0001' then
-      if sqlerrm like 'FAILED%' then raise; end if;
-      raise notice '  ok   一般メンバーは招待を発行できない';
-  end;
-end
-$$;
+\echo '--- 4. 自分の行と他人の行 ---'
 
 -- 自分の表示名は変えられる
+select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
 update public.members set display_name = '母（変更後）'
 where user_id = '33333333-3333-3333-3333-333333333333';
 select pg_temp.expect(
@@ -267,7 +253,7 @@ select pg_temp.expect(
   '自分の表示名は変更できる'
 );
 
--- 他人の役割は変えられない（管理者でないため更新が0件になる）
+-- 他人の役割は変えられない
 with updated as (
   update public.members set role = 'admin'
   where user_id = '11111111-1111-1111-1111-111111111111'
@@ -277,61 +263,41 @@ select pg_temp.expect(
   (select count(*) from updated) = 0,
   '一般メンバーは他人の行を更新できない'
 );
-
-\echo '--- 5. 招待はメールアドレスに紐付けられる ---'
-
 reset role;
 
--- 宛先違いのメールアドレスでは使えない
-do $$
-begin
-  begin
-    insert into auth.users (id, email, raw_user_meta_data)
-    values ('55555555-5555-5555-5555-555555555555', 'betsujin@example.com',
-            json_build_object('display_name', '別人',
-                              'invitation_token',
-                              (select v from t_ctx where k = 'token_bound'))::jsonb);
-    raise exception 'FAILED: 宛先違いでも招待が使えてしまった';
-  exception
-    when sqlstate 'P0001' then
-      if sqlerrm like 'FAILED%' then raise; end if;
-      raise notice '  ok   リンクが転送されても、宛先以外は使えない';
-  end;
-end
-$$;
-
--- 宛先どおりなら使える
-insert into auth.users (id, email, raw_user_meta_data)
-values ('66666666-6666-6666-6666-666666666666', 'haha2@example.com',
-        json_build_object('display_name', '母2',
-                          'invitation_token',
-                          (select v from t_ctx where k = 'token_bound'))::jsonb);
-select pg_temp.expect(
-  (select family_id::text from public.members
-   where user_id = '66666666-6666-6666-6666-666666666666')
-  = (select v from t_ctx where k = 'family_a'),
-  '宛先どおりのメールアドレスなら参加できる'
-);
-
-\echo '--- 6. 管理者がメンバーを増減できる ---'
+\echo '--- 5. 管理者がメンバーを増減できる ---'
 
 select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
 
 -- アカウントを持たないメンバーを足せる
 insert into t_ctx
 select 'child', public.add_offline_member(
-  (select v from t_ctx where k = 'family_a')::uuid, 'たろう');
+  (select v from t_ctx where k = 'family_a')::uuid, 'たろう')::text;
 select pg_temp.expect(
   (select user_id is null and is_active from public.members
    where id = (select v from t_ctx where k = 'child')::uuid),
   'アカウントを持たないメンバーを追加できる'
 );
 
--- メンバーを外すと、その人からはデータが見えなくなる
+-- あとからログインを設定できる
 insert into t_ctx
-select 'haha', (select id::text from public.members
-                where user_id = '33333333-3333-3333-3333-333333333333');
-select public.deactivate_member((select v from t_ctx where k = 'haha')::uuid);
+select 'child_ready', public.prepare_member_for_account(
+  (select v from t_ctx where k = 'family_a')::uuid, null,
+  (select v from t_ctx where k = 'child')::uuid)::text;
+reset role;
+insert into auth.users (id, email, raw_user_meta_data)
+values ('66666666-6666-6666-6666-666666666666', 'taro@example.com',
+        json_build_object('display_name', 'たろう',
+                          'member_id', (select v from t_ctx where k = 'child'))::jsonb);
+select pg_temp.expect(
+  (select user_id = '66666666-6666-6666-6666-666666666666' from public.members
+   where id = (select v from t_ctx where k = 'child')::uuid),
+  'あとからログインを設定できる（新しい行は作られない）'
+);
+
+-- メンバーを外すと、その人からはデータが見えなくなる
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+select public.deactivate_member((select v from t_ctx where k = 'haha_member')::uuid);
 reset role;
 
 select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
@@ -343,22 +309,6 @@ select pg_temp.expect(
   (select count(*) from public.members) = 0,
   '外されたメンバーからはメンバー一覧も見えなくなる'
 );
-reset role;
-
--- 一般メンバーはメンバーを外せない
-select pg_temp.login_as('66666666-6666-6666-6666-666666666666');
-do $$
-begin
-  begin
-    perform public.deactivate_member((select v from t_ctx where k = 'child')::uuid);
-    raise exception 'FAILED: 一般メンバーがメンバーを外せてしまった';
-  exception
-    when sqlstate 'P0001' then
-      if sqlerrm like 'FAILED%' then raise; end if;
-      raise notice '  ok   一般メンバーはメンバーを外せない';
-  end;
-end
-$$;
 reset role;
 
 -- 管理者が自分ひとりのときは、自分を外せない
@@ -380,50 +330,13 @@ end
 $$;
 
 -- 外したメンバーは戻せる
-select public.reactivate_member((select v from t_ctx where k = 'haha')::uuid);
+select public.reactivate_member((select v from t_ctx where k = 'haha_member')::uuid);
 reset role;
 select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
 select pg_temp.expect(
   (select count(*) from public.families) = 1,
   '戻したメンバーからは再び家族が見える'
 );
-reset role;
-
-\echo '--- 7. 招待は使われる前に取り消せる ---'
-
-select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
-insert into t_ctx
-select 'token_revoke', public.create_invitation(
-  (select v from t_ctx where k = 'family_a')::uuid);
-insert into t_ctx
-select 'inv_revoke', (select id::text from public.invitations
-                      where token_hash = encode(
-                        sha256((select v from t_ctx where k = 'token_revoke')::bytea), 'hex'));
-select public.revoke_invitation((select v from t_ctx where k = 'inv_revoke')::uuid);
-reset role;
-
-select pg_temp.expect(
-  not (select is_valid from public.peek_invitation(
-         (select v from t_ctx where k = 'token_revoke'))),
-  '取り消した招待は無効になる'
-);
-
-do $$
-begin
-  begin
-    insert into auth.users (id, email, raw_user_meta_data)
-    values ('77777777-7777-7777-7777-777777777777', 'revoked@example.com',
-            json_build_object('display_name', '取消後',
-                              'invitation_token',
-                              (select v from t_ctx where k = 'token_revoke'))::jsonb);
-    raise exception 'FAILED: 取り消した招待が使えてしまった';
-  exception
-    when sqlstate 'P0001' then
-      if sqlerrm like 'FAILED%' then raise; end if;
-      raise notice '  ok   取り消した招待では参加できない';
-  end;
-end
-$$;
 
 reset role;
 rollback;

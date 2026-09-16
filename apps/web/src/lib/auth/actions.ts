@@ -25,14 +25,14 @@ function toJapaneseMessage(message: string): string {
     return `パスワードは${PASSWORD_MIN_LENGTH}文字以上にしてください`;
   }
   // DB のトリガーが投げる印。公開サインアップを止めた最後の砦。
-  if (/INVITATION_REQUIRED/.test(message)) {
-    return "アカウントの作成には招待が必要です。家族の管理者に招待リンクを発行してもらってください";
+  if (/MEMBER_REQUIRED/.test(message)) {
+    return "アカウントは家族の管理者が登録します。管理者に追加してもらってください";
   }
-  if (/INVITATION_INVALID/.test(message)) {
-    return "招待が使えません。期限切れ・使用済みか、宛先のメールアドレスが違います";
+  if (/MEMBER_NOT_AVAILABLE/.test(message)) {
+    return "このメンバーにはログインを設定できません";
   }
   if (/Signups not allowed/i.test(message)) {
-    return "アカウントの作成には招待が必要です";
+    return "アカウントは家族の管理者が登録します";
   }
   return message;
 }
@@ -65,7 +65,6 @@ export async function signUp(
   const password = String(formData.get("password") ?? "");
   const displayName = String(formData.get("display_name") ?? "").trim();
   const familyName = String(formData.get("family_name") ?? "").trim();
-  const invitationToken = String(formData.get("invitation_token") ?? "").trim();
 
   if (!email || !password || !displayName) {
     return { error: "表示名・メールアドレス・パスワードを入力してください" };
@@ -83,20 +82,10 @@ export async function signUp(
 
   const supabase = await createClient();
 
-  // 招待が無い場合に作れるのは、まだ家族が1つも無いとき（最初の1人）だけ。
-  // ここで弾くのは分かりやすいエラーを出すため。実際の強制は DB のトリガー。
-  if (!invitationToken) {
-    const { data: isBootstrap } = await supabase.rpc("is_bootstrap");
-    if (!isBootstrap) {
-      return {
-        error:
-          "アカウントの作成には招待が必要です。家族の管理者に招待リンクを発行してもらってください",
-      };
-    }
-  }
-
-  // 公開サインアップは止めてあるので、管理APIでユーザーを作る。
-  // 招待の検証は DB のトリガーが行い、条件を満たさなければ作成ごと失敗する。
+  // これは最初の1人（家族を作る人）専用。2人目以降は管理者が /members から登録する。
+  // 公開サインアップは止めてあるので管理APIでユーザーを作り、
+  // 「家族がまだ無いか」の判定は DB のトリガーが行う。
+  // 家族がすでにあれば、作成ごと失敗する。
   const admin = createAdminClient();
   const { error: createError } = await admin.auth.admin.createUser({
     email,
@@ -106,7 +95,6 @@ export async function signUp(
     user_metadata: {
       display_name: displayName,
       family_name: familyName || undefined,
-      invitation_token: invitationToken || undefined,
     },
   });
 
@@ -128,20 +116,4 @@ export async function signOut() {
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/login");
-}
-
-export async function acceptInvitation(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const token = String(formData.get("token") ?? "").trim();
-  if (!token) return { error: "招待リンクが正しくありません" };
-
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("accept_invitation", { token });
-
-  if (error) return { error: error.message };
-
-  revalidatePath("/", "layout");
-  redirect("/members");
 }

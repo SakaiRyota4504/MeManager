@@ -41,19 +41,6 @@ export type Calendar = {
   is_default: boolean;
 } & Timestamps;
 
-export type Invitation = {
-  id: string;
-  family_id: string;
-  token_hash: string;
-  email: string | null;
-  member_id: string | null;
-  created_by: string | null;
-  expires_at: string;
-  accepted_at: string | null;
-  revoked_at: string | null;
-  created_at: string;
-};
-
 export type Database = {
   public: {
     Tables: {
@@ -75,41 +62,16 @@ export type Database = {
         Update: Partial<Calendar>;
         Relationships: [];
       };
-      invitations: {
-        Row: Invitation;
-        Insert: Partial<Invitation> &
-          Pick<Invitation, "family_id" | "token_hash" | "expires_at">;
-        Update: Partial<Invitation>;
-        Relationships: [];
-      };
     };
     Views: Record<string, never>;
     Functions: {
-      create_invitation: {
+      prepare_member_for_account: {
         Args: {
           target_family_id: string;
-          target_email?: string | null;
+          name?: string | null;
           target_member_id?: string | null;
-          valid_days?: number;
         };
         Returns: string;
-      };
-      peek_invitation: {
-        Args: { token: string };
-        Returns: {
-          family_name: string;
-          is_valid: boolean;
-          requires_email: boolean;
-          email_hint: string | null;
-        }[];
-      };
-      accept_invitation: {
-        Args: { token: string };
-        Returns: string;
-      };
-      revoke_invitation: {
-        Args: { invitation_id: string };
-        Returns: void;
       };
       is_bootstrap: {
         Args: Record<string, never>;

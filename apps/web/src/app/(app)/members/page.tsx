@@ -1,9 +1,7 @@
 import { requireSession } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { InvitePanel } from "./invite-panel";
 import { AddMemberPanel } from "./add-member-panel";
 import { MemberRow } from "./member-row";
-import { PendingInvitations } from "./pending-invitations";
 
 export const dynamic = "force-dynamic";
 
@@ -22,17 +20,6 @@ export default async function MembersPage() {
   const active = allMembers?.filter((m) => m.is_active) ?? [];
   const inactive = allMembers?.filter((m) => !m.is_active) ?? [];
 
-  // 招待の一覧は管理者しか読めない（RLS）。
-  const { data: invitations } = isAdmin
-    ? await supabase
-        .from("invitations")
-        .select("*")
-        .is("accepted_at", null)
-        .is("revoked_at", null)
-        .gt("expires_at", new Date().toISOString())
-        .order("created_at", { ascending: false })
-    : { data: null };
-
   return (
     <div className="space-y-10">
       <section className="space-y-4">
@@ -48,6 +35,7 @@ export default async function MembersPage() {
               member={member}
               isSelf={member.id === session.member.id}
               canManage={isAdmin}
+              familyId={session.family.id}
             />
           ))}
         </ul>
@@ -59,15 +47,7 @@ export default async function MembersPage() {
         )}
       </section>
 
-      {isAdmin && (
-        <>
-          <AddMemberPanel familyId={session.family.id} />
-          <InvitePanel familyId={session.family.id} />
-          {invitations && invitations.length > 0 && (
-            <PendingInvitations invitations={invitations} />
-          )}
-        </>
-      )}
+      {isAdmin && <AddMemberPanel familyId={session.family.id} />}
 
       {inactive.length > 0 && (
         <section className="space-y-3">
@@ -84,6 +64,7 @@ export default async function MembersPage() {
                 member={member}
                 isSelf={false}
                 canManage={isAdmin}
+                familyId={session.family.id}
               />
             ))}
           </ul>
