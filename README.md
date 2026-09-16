@@ -34,7 +34,7 @@
 | [docs/02-schedule-requirements.md](docs/02-schedule-requirements.md) | スケジュール管理の要件定義（機能・非機能・データモデル・API・画面） |
 | [docs/03-roadmap.md](docs/03-roadmap.md) | 実装の進め方とステップ |
 | [docs/04-csv-format.md](docs/04-csv-format.md) | 取り込みCSVの形式と、football-data.org からのCSVの作り方 |
-| [docs/05-setup.md](docs/05-setup.md) | **動かすまでの手順**（Docker を使わない道も書いてある） |
+| [docs/05-setup.md](docs/05-setup.md) | **動かすまでの手順**（PCに何も入れずに公開できる） |
 | [docs/prototypes/](docs/prototypes/) | 実装前に操作感を確かめた試作画面 |
 
 ## 利用者の管理
@@ -62,28 +62,30 @@
   自動化は作らず、そのぶん毎月の繰り返し操作を短くすることに手をかける
   （取り込み設定を「プリセット」として保存し、次回はファイルを渡すだけにする）
 
+## 動かす
+
+**手順は [docs/05-setup.md](docs/05-setup.md) にある。PCには何もインストールしない。**
+
+1. **Supabase** でプロジェクトを作り、[`supabase/schema.sql`](supabase/schema.sql)
+   を SQL Editor に貼り付けて実行する
+2. サインアップを止め、接続情報3つを控える
+3. **Vercel** でこのリポジトリを取り込む
+   - **Root Directory を `apps/web`** にする（ここを変えないとビルドが失敗する）
+   - 環境変数に2の3つを入れる
+4. 出てきたURLを Supabase の **Site URL** に登録する
+
+これで家族がURLを開いて使える。スマートフォンからも同じURL。
+以後は既定ブランチに変更が入るたび、Vercel が自動でビルドし直す。
+
 ## 開発
 
-**手順は [docs/05-setup.md](docs/05-setup.md) にまとめてある。** 道は2つある。
-
-| | A. Supabase のサイトを使う | B. 手元で動かす |
-| --- | --- | --- |
-| 必要なもの | ブラウザと Node.js | ＋ Docker と Supabase CLI |
-| テーブルの作成 | SQL を1回貼り付ける | `supabase db reset` |
-| 家族が使えるか | 使える | 自分のPCだけ |
-
-**実際に使い始めるなら A。** Docker も CLI も要らない。
-テーブルは [`supabase/schema.sql`](supabase/schema.sql) を
-Supabase の SQL Editor に貼り付けるだけで作れる。
+コードをいじるときだけ、手元でも動かせる。
 
 ```bash
 pnpm install
-# supabase/schema.sql の中身を Supabase の SQL Editor に貼って Run
 cp .env.example .env.local        # Supabase の画面から3つの値を書き写す
 pnpm dev
 ```
-
-http://localhost:3000 を開くと、セットアップの状態が表示される。
 
 ### コマンド
 

@@ -1,171 +1,199 @@
 # セットアップ手順
 
-動かすまでの手順。**A と B のどちらか一方**を選べばよい。
+**PCには何もインストールしない。** ブラウザだけで公開まで終わる。
 
-| | A. Supabase のサイトを使う | B. 手元で動かす |
-| --- | --- | --- |
-| 必要なもの | ブラウザと Node.js | ブラウザ、Node.js、**Docker**、**Supabase CLI** |
-| 家族が使えるか | **使える**（URLを開くだけ） | 自分のPCでしか動かない |
-| 向いている場面 | **実際に使い始めるとき** | コードをいじって試すとき |
+Supabase（データの置き場）と Vercel（アプリの置き場）を、
+それぞれのサイトで設定してつなぐ。所要時間は15分ほど。
 
-迷ったら **A** を選ぶ。家族に使ってもらうには結局 A が必要になる。
+```
+   GitHub のこのリポジトリ
+            │
+            │ つなぐと自動でビルドされる
+            ▼
+   ┌─────────────────┐        ┌──────────────────┐
+   │     Vercel      │ ─────▶ │    Supabase      │
+   │  （アプリの置き場） │        │ （データの置き場）  │
+   │  https://...    │        │  テーブル・ログイン │
+   └─────────────────┘        └──────────────────┘
+            │
+            ▼
+   家族がこのURLを開いて使う
+```
 
 ---
 
-## A. Supabase のサイトを使う（Docker も CLI も不要）
+## 1. Supabase を用意する
 
-### A-1. Supabase のプロジェクトを作る
+### 1-1. プロジェクトを作る
 
-1. https://supabase.com でアカウントを作る（無料）
-2. 「New project」でプロジェクトを作る
-   - Region は `Northeast Asia (Tokyo)` が近い
-   - Database Password は控えておく（あとで使うことがある）
-3. 数分待つと準備が終わる
+1. https://supabase.com にアクセスし、GitHub アカウントでサインイン
+2. **New project** を押す
+3. 入力する
+   - **Name**: `memanager`（何でもよい）
+   - **Database Password**: 適当に作って控えておく
+   - **Region**: `Northeast Asia (Tokyo)`
+4. **Create new project** を押し、2〜3分待つ
 
-### A-2. テーブルを作る
-
-ここが CLI の代わり。**用意してある SQL を1回貼り付けるだけ**で済む。
+### 1-2. テーブルを作る
 
 1. リポジトリの **[`supabase/schema.sql`](../supabase/schema.sql)** を開く
-2. 中身を**全部**コピーする
+2. 中身を**全部**コピーする（1800行ほどある）
 3. Supabase の画面左の **SQL Editor** を開く
-4. 貼り付けて **Run**（または `Ctrl/Cmd + Enter`）
+4. 貼り付けて **Run**（`Ctrl/Cmd + Enter` でも可）
 
-「Success. No rows returned」と出れば完了。
-左の **Table Editor** に `families` `members` `calendars` `events`
-`event_assignees` の5つのテーブルが見えるはず。
+**Success. No rows returned** と出れば完了。
+左の **Table Editor** に5つのテーブルが見える。
+
+| テーブル | 中身 |
+| --- | --- |
+| `families` | 家族 |
+| `members` | メンバー |
+| `calendars` | カレンダー |
+| `events` | 予定 |
+| `event_assignees` | 予定の担当者 |
 
 > 全体が `begin;` 〜 `commit;` で囲んであるので、
-> 途中で失敗しても中途半端なテーブルは残らない。やり直せばよい。
+> 途中で失敗しても中途半端なテーブルは残らない。貼り直せばよい。
 
 > `schema.sql` は `supabase/migrations/` から機械的に作った写し。
-> **手で書き換えない。** テーブルを変えたいときは migrations 側を直し、
-> `supabase/bundle.sh > supabase/schema.sql` で作り直す
-> （ずれていると CI が失敗する）。
+> **手で書き換えない。**
 
-### A-3. 勝手にアカウントを作られないようにする
+### 1-3. 勝手にアカウントを作られないようにする
 
-**この設定を忘れると、URLを知った人が誰でもアカウントを作れてしまう。**
+**忘れると、URLを知った人が誰でもアカウントを作れてしまう。**
 
 1. 左の **Authentication** → **Sign In / Providers**
-2. **Allow new users to sign up** を **オフ** にする
+2. **Allow new users to sign up** を **オフ** にして保存
 
-アプリ側とDB側にも同じ守りが入っているので、これを忘れても
-家族のデータが漏れることはない。ただし入口は閉じておく。
+> 忘れても家族のデータは漏れない。アプリとDBにも同じ守りがあり、
+> 登録していない人はDBのトリガーで弾かれる。ただし入口は閉じておく。
 
-### A-4. 接続情報を控える
+### 1-4. 接続情報を控える
 
-左の **Project Settings** → **API** に3つある。
+左の **Project Settings** → **API** を開く。3つ使う。
 
-| 画面の表記 | 書き写す先 |
+| 画面の表記 | あとで貼る名前 |
 | --- | --- |
 | Project URL | `NEXT_PUBLIC_SUPABASE_URL` |
 | anon public | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
 | service_role | `SUPABASE_SERVICE_ROLE_KEY` |
 
 **service_role はすべてのデータを操作できる鍵。** 人に見せない。
-`NEXT_PUBLIC_` を付けないこと（付けるとブラウザに配られてしまう）。
-
-### A-5. 動かす
-
-```bash
-pnpm install
-cp .env.example .env.local     # A-4 の3つを書き込む
-pnpm dev
-```
-
-http://localhost:3000 を開く。
-「接続できました」と出たら、最初のアカウントを作る。
-
-### A-6. 家族が使えるようにする（任意）
-
-自分のPCを閉じても使えるようにするには、ウェブに置く。
-
-1. https://vercel.com でこのリポジトリをつなぐ
-2. **Root Directory** を `apps/web` にする
-3. 環境変数に A-4 の3つを入れる
-4. デプロイすると URL が出る。それを家族に渡す
-
-Supabase 側にも、その URL を登録しておく。
-**Authentication** → **URL Configuration** → **Site URL** に貼る。
+チャットやメールに貼らない。
 
 ---
 
-## B. 手元で動かす（開発するとき）
+## 2. Vercel に置く
 
-### B-1. 必要なものを入れる
+### 2-1. リポジトリをつなぐ
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
-  - macOS: `brew install supabase/tap/supabase`
-  - Windows: `scoop install supabase`
+1. https://vercel.com にアクセスし、GitHub アカウントでサインイン
+2. **Add New...** → **Project**
+3. `SakaiRyota4504/MeManager` を選んで **Import**
 
-`supabase --version` が表示されれば入っている。
+### 2-2. 設定する
 
-### B-2. 起動する
+デプロイ前の画面で2か所いじる。
 
-```bash
-supabase start
-```
+**Root Directory**（重要）
 
-初回は Docker イメージの取得に数分かかる。
-終わると接続情報が表示される。
+- **Edit** を押して `apps/web` を選ぶ
+- アプリは `apps/web` にあるので、ここを変えないとビルドが失敗する
 
-| 表示 | 用途 |
+**Environment Variables**
+
+1-4 で控えた3つを入れる。
+
+| Name | Value |
 | --- | --- |
-| `API URL` | `NEXT_PUBLIC_SUPABASE_URL` |
-| `anon key` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
-| `service_role key` | `SUPABASE_SERVICE_ROLE_KEY` |
-| `Studio URL` | テーブルの中身を見る画面 |
-| `Inbucket URL` | ローカルで送られたメールを見る画面 |
+| `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon public |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role |
 
-### B-3. テーブルを作る
+**Deploy** を押す。2〜3分でURLが出る。
 
-```bash
-supabase db reset
-```
+### 2-3. Supabase にURLを教える
 
-**このコマンドは、ローカルのデータベースを作り直して
-`supabase/migrations/` のSQLを最初から全部流す。**
-中のデータは消える。ローカル専用なので、本番のデータには影響しない。
+ログインの戻り先として登録する。
 
-### B-4. 動かす
+1. Supabase の **Authentication** → **URL Configuration**
+2. **Site URL** に Vercel のURL（`https://....vercel.app`）を貼る
+3. 保存
+
+---
+
+## 3. 使い始める
+
+1. Vercel のURLを開く
+2. **アカウントを作る** から最初のアカウントを作る
+   - ここで作った人が家族の管理者になる
+   - 家族と「家族共有」カレンダーも同時に作られる
+3. **メンバー** 画面から家族を登録する
+   - ログインさせる人には、メールアドレスとパスワードを決めて伝える
+   - 小さいお子さんは名前だけでよい（予定の担当者に指定できる）
+4. **カレンダー** 画面で予定を追加する
+
+スマートフォンからも同じURLで使える。
+
+---
+
+## 更新するとき
+
+GitHub の既定ブランチ（`claude/eager-euler-1p9wkr`）に変更が入ると、
+**Vercel が自動でビルドし直す。** 何もしなくてよい。
+
+ただし**テーブルの形が変わったときだけ**、Supabase 側の更新が要る。
+そのときはこちらから知らせるので、新しい SQL を SQL Editor で実行する。
+
+---
+
+## 開発するとき（コードをいじる場合）
+
+使うだけなら、ここから先は読まなくてよい。
+
+### 手元で動かす
 
 ```bash
 pnpm install
-cp .env.example .env.local     # B-2 の3つを書き込む
+cp .env.example .env.local     # 1-4 の3つを書き込む
 pnpm dev
 ```
 
+http://localhost:3000 が開く。データは Supabase を共有するので、
+Vercel 版と同じものが見える。
+
+### データも手元で動かす（Docker が必要）
+
+本番のデータを触りたくないときは、Supabase も手元に立てる。
+
+```bash
+supabase start        # Docker と Supabase CLI が要る
+supabase db reset     # 手元のDBを作り直し、マイグレーションを全部流す
+```
+
+`supabase start` が出す URL と鍵を `.env.local` に書き写す。
 止めるときは `supabase stop`。
 
 ---
 
-## よく出るコマンドの意味
-
-| コマンド | 何をするか | 必要なもの |
-| --- | --- | --- |
-| `supabase start` | 手元に Supabase 一式を起動する | Docker, CLI |
-| `supabase stop` | それを止める | Docker, CLI |
-| `supabase db reset` | 手元のDBを作り直し、マイグレーションを全部流す | Docker, CLI |
-| `supabase db push` | 本番のDBにマイグレーションを流す | CLI |
-| `supabase/bundle.sh` | マイグレーションを1ファイルにまとめる（貼り付け用） | 不要 |
-| `pnpm dev` | アプリを起動する | Node.js |
-| `pnpm test` | 日付計算などのテスト | Node.js |
-| `supabase/tests/run.sh` | DBとRLSの検証 | PostgreSQL |
-
 ## うまくいかないとき
 
+**Vercel のビルドが失敗する**
+Root Directory が `apps/web` になっているか確認する（2-2）。
+それでも失敗するなら、ビルドログを見せてほしい。
+
 **「接続できません」と出る**
-`.env.local` の3つの値を確認する。書き換えたら開発サーバーを再起動する。
+環境変数の3つを確認する。Vercel では
+**Settings** → **Environment Variables** から直せる。
+直したあとは **Deployments** → 最新の **⋯** → **Redeploy** が必要。
 
 **ログインできない**
-A-3 でサインアップを止めているので、`/signup` は最初の1人にしか使えない。
+1-3 でサインアップを止めているので、`/signup` は最初の1人にしか使えない。
 2人目以降は、1人目がログインして「メンバー」画面から登録する。
 
 **「SUPABASE_SERVICE_ROLE_KEY が未設定」と出る**
-`.env.local` に3つ目の鍵を書き忘れている。アカウントの作成に必要。
+3つ目の鍵を入れ忘れている。アカウントの作成に必要。
 
 **テーブルが見当たらない**
-A-2 の SQL を流し忘れている。SQL Editor で
+1-2 の SQL を流し忘れている。SQL Editor で
 `select * from families;` を実行して確かめる。
