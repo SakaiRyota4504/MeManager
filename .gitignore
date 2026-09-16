@@ -17,6 +17,9 @@ dist/
 supabase/.branches/
 supabase/.temp/
 
+# bundle.sh が作る貼り付け用SQL（migrations/ から生成する）
+schema.sql
+
 # エディタ・OS
 .DS_Store
 *.swp

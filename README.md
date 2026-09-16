@@ -34,6 +34,7 @@
 | [docs/02-schedule-requirements.md](docs/02-schedule-requirements.md) | スケジュール管理の要件定義（機能・非機能・データモデル・API・画面） |
 | [docs/03-roadmap.md](docs/03-roadmap.md) | 実装の進め方とステップ |
 | [docs/04-csv-format.md](docs/04-csv-format.md) | 取り込みCSVの形式と、football-data.org からのCSVの作り方 |
+| [docs/05-setup.md](docs/05-setup.md) | **動かすまでの手順**（Docker を使わない道も書いてある） |
 | [docs/prototypes/](docs/prototypes/) | 実装前に操作感を確かめた試作画面 |
 
 ## 利用者の管理
@@ -63,27 +64,22 @@
 
 ## 開発
 
-### 必要なもの
+**手順は [docs/05-setup.md](docs/05-setup.md) にまとめてある。** 道は2つある。
 
-- Node.js 22 以降
-- pnpm 10 以降（`corepack enable` で有効にできる）
-- Docker と [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
+| | A. Supabase のサイトを使う | B. 手元で動かす |
+| --- | --- | --- |
+| 必要なもの | ブラウザと Node.js | ＋ Docker と Supabase CLI |
+| テーブルの作成 | SQL を1回貼り付ける | `supabase db reset` |
+| 家族が使えるか | 使える | 自分のPCだけ |
 
-### 手順
+**実際に使い始めるなら A。** Docker も CLI も要らない。
+`supabase/bundle.sh` がマイグレーションを1つのSQLにまとめるので、
+それを Supabase の SQL Editor に貼り付ければテーブルができる。
 
 ```bash
 pnpm install
-
-# Supabase のローカル環境を起動する（初回は Docker イメージの取得に時間がかかる）
-supabase start
-
-# 表示された API URL / anon key / service_role key を .env.local に書き写す
-# service_role key はアカウントの作成に必要（サーバー側でのみ使う）
-cp .env.example .env.local
-
-# マイグレーションを適用する
-supabase db reset
-
+supabase/bundle.sh > schema.sql   # 中身を SQL Editor に貼る
+cp .env.example .env.local        # Supabase の画面から3つの値を書き写す
 pnpm dev
 ```
 
@@ -102,6 +98,7 @@ http://localhost:3000 を開くと、セットアップの状態が表示され�
 | `pnpm check` | lint・型チェック・整形確認・テストをまとめて実行 |
 | `pnpm --filter web gen:types` | Supabase のスキーマから TypeScript の型を生成 |
 | `supabase/tests/run.sh` | マイグレーションと RLS の検証（PostgreSQL が必要） |
+| `supabase/bundle.sh` | マイグレーションを1ファイルにまとめる（貼り付け用。CLI 不要） |
 
 ### RLS の検証
 
