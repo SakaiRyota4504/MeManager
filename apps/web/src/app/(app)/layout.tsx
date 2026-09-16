@@ -10,9 +10,19 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     <>
       <header className="border-b border-border">
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-6 py-3">
-          <Link href="/members" className="font-semibold">
-            MeManager
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/calendar" className="font-semibold">
+              MeManager
+            </Link>
+            <nav className="flex gap-3 text-sm">
+              <Link href="/calendar" className="text-muted hover:underline">
+                カレンダー
+              </Link>
+              <Link href="/members" className="text-muted hover:underline">
+                メンバー
+              </Link>
+            </nav>
+          </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="hidden text-muted sm:inline">
               {session.family.name}

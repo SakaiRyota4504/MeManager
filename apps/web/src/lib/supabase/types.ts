@@ -31,6 +31,34 @@ export type Member = {
   is_active: boolean;
 } & Timestamps;
 
+export type EventStatus = "confirmed" | "tentative" | "cancelled";
+
+export type CalendarEvent = {
+  id: string;
+  family_id: string;
+  calendar_id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  all_day: boolean;
+  /** 時刻付きのとき。終了は排他的 */
+  starts_at: string | null;
+  ends_at: string | null;
+  /** 終日のとき。終了は包含的 */
+  start_date: string | null;
+  end_date: string | null;
+  timezone: string;
+  color: string | null;
+  status: EventStatus;
+  created_by: string | null;
+  deleted_at: string | null;
+} & Timestamps;
+
+export type EventAssignee = {
+  event_id: string;
+  member_id: string;
+};
+
 export type Calendar = {
   id: string;
   family_id: string;
@@ -56,6 +84,35 @@ export type Database = {
         Update: Partial<Member>;
         Relationships: [];
       };
+      events: {
+        Row: CalendarEvent;
+        Insert: Partial<CalendarEvent>;
+        Update: Partial<CalendarEvent>;
+        Relationships: [];
+      };
+      event_assignees: {
+        Row: EventAssignee;
+        Insert: EventAssignee;
+        Update: Partial<EventAssignee>;
+        // 外部キーを書いておかないと、supabase-js が
+        // `select("*, event_assignees(...)")` の埋め込みを解決できない。
+        Relationships: [
+          {
+            foreignKeyName: "event_assignees_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_assignees_member_id_fkey";
+            columns: ["member_id"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       calendars: {
         Row: Calendar;
         Insert: Partial<Calendar> & Pick<Calendar, "family_id" | "name">;
@@ -65,6 +122,22 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      create_event: {
+        Args: { payload: Record<string, unknown> };
+        Returns: string;
+      };
+      update_event: {
+        Args: { target_event_id: string; payload: Record<string, unknown> };
+        Returns: void;
+      };
+      delete_event: {
+        Args: { target_event_id: string };
+        Returns: void;
+      };
+      restore_event: {
+        Args: { target_event_id: string };
+        Returns: void;
+      };
       prepare_member_for_account: {
         Args: {
           target_family_id: string;

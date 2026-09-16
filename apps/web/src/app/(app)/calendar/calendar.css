@@ -1,0 +1,207 @@
+/* カレンダーの見た目。docs/prototypes/calendar.html で確認した内容をそのまま持ってくる。
+   数値（文字サイズ・画面幅の境目）は要件定義9章に根拠がある。 */
+
+.cal-weekhead {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: 1px;
+  padding: 0 1px; /* grid の 1px 枠に桁を合わせる */
+}
+.cal-weekhead > div {
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-muted);
+  padding: 5px 0;
+}
+.cal-weekhead > div:first-child {
+  color: var(--color-sun);
+}
+.cal-weekhead > div:last-child {
+  color: var(--color-sat);
+}
+
+.cal-grid {
+  /* minmax(0, 1fr) にしないと、予定の文字幅ぶん列が広がって横スクロールになる */
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cal-cell {
+  background: var(--color-background);
+  min-height: 108px;
+  padding: 3px 3px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+.cal-cell.is-out {
+  background: var(--color-surface-2);
+  color: var(--color-muted);
+}
+.cal-cell.is-today {
+  background: var(--color-today);
+}
+
+.cal-add {
+  border: 0;
+  background: none;
+  flex: 1;
+  min-height: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.cal-daynum {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  align-self: flex-start;
+  padding: 1px 5px;
+  border-radius: 999px;
+}
+.cal-cell.is-today .cal-daynum {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  font-weight: 700;
+}
+.cal-cell.is-sun .cal-daynum {
+  color: var(--color-sun);
+}
+.cal-cell.is-sat .cal-daynum {
+  color: var(--color-sat);
+}
+.cal-cell.is-today.is-sun .cal-daynum,
+.cal-cell.is-today.is-sat .cal-daynum {
+  color: var(--color-accent-fg);
+}
+
+/* 月表示のマスは狭い。本文より小さい専用のサイズを持たせ、
+   タイトルが5文字は読めることを優先する。
+   button なので font 系は明示する（font: inherit だと本文の14pxに戻る）。 */
+.cal-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 400;
+  font-size: var(--chip-size, 11px);
+  line-height: 1.4;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: var(--color-surface-2);
+  border: 0;
+  border-left: 3px solid var(--color-accent);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.cal-chip .cal-chip-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-chip .cal-chip-time {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  font-size: 0.85em;
+  letter-spacing: -0.02em;
+}
+.cal-chip.is-cancelled {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.cal-chip.is-tentative {
+  border-left-style: dashed;
+}
+
+.cal-more {
+  font-size: 10.5px;
+  color: var(--color-muted);
+  padding-left: 3px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* サイドバーが出たままマスが狭くなる幅では、時刻よりタイトルを優先する */
+@media (max-width: 1100px) {
+  .cal-chip .cal-chip-time {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .cal-cell {
+    min-height: 82px;
+    padding: 2px 2px 4px;
+  }
+  .cal-chip {
+    --chip-size: 10px;
+    min-height: 19px;
+    padding: 1px 2px;
+    gap: 2px;
+    border-left-width: 2px;
+  }
+  .cal-more {
+    font-size: 10px;
+    padding-left: 2px;
+  }
+}
+
+/* 7列の月表示では、この幅がタイトルを読める限界。
+   1行だと3文字＋「…」しか入らないので、2行に折り返して5文字を確保する。 */
+@media (max-width: 460px) {
+  .cal-cell {
+    padding: 2px 1px 4px;
+    min-height: 94px;
+  }
+  .cal-chip {
+    --chip-size: 9.5px;
+    padding: 1px 1px 1px 2px;
+    border-left-width: 2px;
+    border-radius: 3px;
+    gap: 1px;
+    align-items: flex-start;
+    white-space: normal;
+  }
+  .cal-chip .cal-chip-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+    word-break: break-all;
+    line-height: 1.25;
+    overflow: hidden;
+  }
+  .cal-daynum {
+    padding: 1px 3px;
+  }
+}
+
+/* 指で押せる大きさ（44px）を確保する */
+@media (max-width: 900px) {
+  .cal-nav-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .cal-seg {
+    width: 100%;
+    order: 3;
+  }
+  .cal-seg button {
+    flex: 1;
+    padding: 9px 20px;
+  }
+}

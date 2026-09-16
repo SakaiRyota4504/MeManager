@@ -339,6 +339,209 @@ select pg_temp.expect(
 );
 
 reset role;
+
+\echo '--- 6. 予定の登録 ---'
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+
+insert into t_ctx
+select 'cal', (select id::text from public.calendars where is_default limit 1);
+insert into t_ctx
+select 'chichi', (select id::text from public.members
+                  where user_id = '11111111-1111-1111-1111-111111111111');
+
+-- 時刻付きの予定
+insert into t_ctx
+select 'ev1', public.create_event(jsonb_build_object(
+  'calendar_id', (select v from t_ctx where k = 'cal'),
+  'title', 'ピアノ教室',
+  'starts_at', '2026-09-15T07:00:00Z',
+  'ends_at',   '2026-09-15T08:00:00Z',
+  'location', '市民センター',
+  'assignees', jsonb_build_array((select v from t_ctx where k = 'child'))
+))::text;
+
+select pg_temp.expect(
+  (select title = 'ピアノ教室' and not all_day and status = 'confirmed'
+   from public.events where id = (select v from t_ctx where k = 'ev1')::uuid),
+  '時刻付きの予定を作れる'
+);
+select pg_temp.expect(
+  (select count(*) from public.event_assignees
+   where event_id = (select v from t_ctx where k = 'ev1')::uuid) = 1,
+  '担当者が紐付く'
+);
+
+-- 終日の予定
+insert into t_ctx
+select 'ev2', public.create_event(jsonb_build_object(
+  'calendar_id', (select v from t_ctx where k = 'cal'),
+  'title', '家族旅行',
+  'all_day', true,
+  'start_date', '2026-09-21',
+  'end_date',   '2026-09-23',
+  'assignees', jsonb_build_array((select v from t_ctx where k = 'chichi'),
+                                 (select v from t_ctx where k = 'child'))
+))::text;
+
+select pg_temp.expect(
+  (select all_day and starts_at is null and start_date = '2026-09-21'
+   from public.events where id = (select v from t_ctx where k = 'ev2')::uuid),
+  '終日の予定は日付だけで持つ（タイムゾーン変換の対象外）'
+);
+
+\echo '--- 7. 担当者は1人以上（FR-E06） ---'
+
+do $$
+begin
+  begin
+    perform public.create_event(jsonb_build_object(
+      'calendar_id', (select v from t_ctx where k = 'cal'),
+      'title', '担当者なし',
+      'starts_at', '2026-09-16T01:00:00Z',
+      'ends_at',   '2026-09-16T02:00:00Z',
+      'assignees', '[]'::jsonb));
+    raise exception 'FAILED: 担当者なしで予定が作れた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   担当者なしでは予定を作れない';
+  end;
+end
+$$;
+
+-- 更新で担当者を空にもできない
+do $$
+begin
+  begin
+    perform public.update_event((select v from t_ctx where k = 'ev1')::uuid,
+      jsonb_build_object('assignees', '[]'::jsonb));
+    raise exception 'FAILED: 更新で担当者を空にできた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   更新でも担当者を空にできない';
+  end;
+end
+$$;
+
+-- テーブルを直接叩いても最後の1人は消せない
+do $$
+begin
+  begin
+    delete from public.event_assignees
+    where event_id = (select v from t_ctx where k = 'ev1')::uuid;
+    raise exception 'FAILED: 最後の担当者を直接消せた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   最後の担当者はテーブルから直接も消せない';
+  end;
+end
+$$;
+
+-- 他の家族のメンバーは担当者にできない
+do $$
+declare v_other uuid;
+begin
+  select id into v_other from public.members
+  where family_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid limit 1;
+  begin
+    perform public.create_event(jsonb_build_object(
+      'calendar_id', (select v from t_ctx where k = 'cal'),
+      'title', 'よその人',
+      'starts_at', '2026-09-16T01:00:00Z',
+      'ends_at',   '2026-09-16T02:00:00Z',
+      'assignees', jsonb_build_array(v_other)));
+    raise exception 'FAILED: 他の家族のメンバーを担当者にできた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   他の家族のメンバーは担当者にできない';
+  end;
+end
+$$;
+
+\echo '--- 8. 期間の整合性 ---'
+
+do $$
+begin
+  begin
+    perform public.create_event(jsonb_build_object(
+      'calendar_id', (select v from t_ctx where k = 'cal'),
+      'title', '逆転',
+      'starts_at', '2026-09-16T05:00:00Z',
+      'ends_at',   '2026-09-16T04:00:00Z',
+      'assignees', jsonb_build_array((select v from t_ctx where k = 'chichi'))));
+    raise exception 'FAILED: 終了が開始より前でも作れた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   終了が開始より前の予定は作れない';
+  end;
+end
+$$;
+
+\echo '--- 9. 予定の更新と削除 ---'
+
+select public.update_event((select v from t_ctx where k = 'ev1')::uuid,
+  jsonb_build_object('title', 'ピアノ教室（発表会）', 'status', 'tentative'));
+select pg_temp.expect(
+  (select title = 'ピアノ教室（発表会）' and status = 'tentative'
+   from public.events where id = (select v from t_ctx where k = 'ev1')::uuid),
+  '予定を更新できる'
+);
+
+-- 担当者の入れ替え（途中で0人にならない）
+select public.update_event((select v from t_ctx where k = 'ev1')::uuid,
+  jsonb_build_object('assignees',
+    jsonb_build_array((select v from t_ctx where k = 'chichi'))));
+select pg_temp.expect(
+  (select array_agg(member_id::text) = array[(select v from t_ctx where k = 'chichi')]
+   from public.event_assignees where event_id = (select v from t_ctx where k = 'ev1')::uuid),
+  '担当者を入れ替えられる'
+);
+
+select public.delete_event((select v from t_ctx where k = 'ev1')::uuid);
+select pg_temp.expect(
+  (select count(*) from public.events
+   where id = (select v from t_ctx where k = 'ev1')::uuid) = 0,
+  '削除した予定は見えなくなる（論理削除）'
+);
+select public.restore_event((select v from t_ctx where k = 'ev1')::uuid);
+select pg_temp.expect(
+  (select count(*) from public.events
+   where id = (select v from t_ctx where k = 'ev1')::uuid) = 1,
+  '削除した予定を戻せる'
+);
+
+\echo '--- 10. 予定も家族をまたいで見えない ---'
+
+reset role;
+select pg_temp.login_as('22222222-2222-2222-2222-222222222222');
+select pg_temp.expect(
+  (select count(*) from public.events) = 0,
+  '別の家族の予定は見えない'
+);
+select pg_temp.expect(
+  (select count(*) from public.event_assignees) = 0,
+  '別の家族の担当者も見えない'
+);
+do $$
+begin
+  begin
+    perform public.update_event((select v from t_ctx where k = 'ev1')::uuid,
+      jsonb_build_object('title', '乗っ取り'));
+    raise exception 'FAILED: 別の家族の予定を更新できた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   別の家族の予定はIDを指定しても更新できない';
+  end;
+end
+$$;
+
+reset role;
 rollback;
 
 \echo ''

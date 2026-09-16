@@ -12,7 +12,7 @@ export default async function Home() {
 
   if (configured) {
     const session = await getSession();
-    if (session) redirect("/members");
+    if (session) redirect("/calendar");
   }
 
   const connection = configured ? await checkDatabaseConnection() : null;

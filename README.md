@@ -97,8 +97,9 @@ http://localhost:3000 を開くと、セットアップの状態が表示され�
 | `pnpm build` | 本番ビルド |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | 型チェック |
+| `pnpm test` | 日付計算などのユニットテスト（Vitest） |
 | `pnpm format` | Prettier での整形（Markdown は対象外） |
-| `pnpm check` | lint・型チェック・整形確認をまとめて実行 |
+| `pnpm check` | lint・型チェック・整形確認・テストをまとめて実行 |
 | `pnpm --filter web gen:types` | Supabase のスキーマから TypeScript の型を生成 |
 | `supabase/tests/run.sh` | マイグレーションと RLS の検証（PostgreSQL が必要） |
 
@@ -122,14 +123,16 @@ docs/               … 要件定義と設計
 
 ## 現在のフェーズ
 
-[ロードマップ](docs/03-roadmap.md) の **Step 1（認証と家族・メンバー）まで実装済み**。
-次は Step 2（予定の基本機能）。
+[ロードマップ](docs/03-roadmap.md) の **Step 2（予定の基本機能）まで実装済み**。
+次は Step 3（絞り込み）。
 
-ログイン・メンバーの登録（ログイン付き／名前だけ）・削除と復帰が動く。
-DB スキーマと RLS は `supabase/tests/run.sh` で検証済み（33項目）。
+- ログイン、メンバーの登録（ログイン付き／名前だけ）・削除と復帰
+- カレンダーの月表示・一覧表示、予定の作成・編集・削除・詳細
+- 担当者の色分け、確定／仮／中止の表示
 
-カレンダー画面は [試作](docs/prototypes/calendar.html)で操作感を確認済み。
-実装は要件定義の9章（画面）に従う。
+DB スキーマと RLS は `supabase/tests/run.sh` で検証済み（40項目）。
+日付計算は `pnpm test` で検証済み（13項目）。
+画面の作りは [試作](docs/prototypes/calendar.html)をなぞっている。
 
 未決定事項は [docs/02-schedule-requirements.md](docs/02-schedule-requirements.md) の
 「13. 要確認事項」にまとめてある。

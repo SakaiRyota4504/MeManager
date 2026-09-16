@@ -54,7 +54,7 @@ export async function signIn(
   if (error) return { error: toJapaneseMessage(error.message) };
 
   revalidatePath("/", "layout");
-  redirect("/members");
+  redirect("/calendar");
 }
 
 export async function signUp(
@@ -108,7 +108,7 @@ export async function signUp(
   if (signInError) return { error: toJapaneseMessage(signInError.message) };
 
   revalidatePath("/", "layout");
-  redirect("/members");
+  redirect("/calendar");
 }
 
 export async function signOut() {

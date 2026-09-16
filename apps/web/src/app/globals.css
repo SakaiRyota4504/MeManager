@@ -5,7 +5,13 @@
   --foreground: #18181b;
   --muted: #71717a;
   --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --surface-2: #fafafa;
   --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --today: #eff6ff;
+  --sat: #2563eb;
+  --sun: #dc2626;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -14,7 +20,13 @@
     --foreground: #fafafa;
     --muted: #a1a1aa;
     --border: #27272a;
+    --border-strong: #3f3f46;
+    --surface-2: #17171a;
     --accent: #60a5fa;
+    --accent-fg: #0b1220;
+    --today: #16233a;
+    --sat: #60a5fa;
+    --sun: #f87171;
   }
 }
 
@@ -23,7 +35,13 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-surface-2: var(--surface-2);
   --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-today: var(--today);
+  --color-sat: var(--sat);
+  --color-sun: var(--sun);
   --font-sans:
     system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP",
     Meiryo, sans-serif;
