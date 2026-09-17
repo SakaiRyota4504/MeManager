@@ -35,6 +35,7 @@
 | [docs/03-roadmap.md](docs/03-roadmap.md) | 実装の進め方とステップ |
 | [docs/04-csv-format.md](docs/04-csv-format.md) | 取り込みCSVの形式と、football-data.org からのCSVの作り方 |
 | [docs/05-setup.md](docs/05-setup.md) | **動かすまでの手順**（PCに何も入れずに公開できる） |
+| [docs/06-app-shell.md](docs/06-app-shell.md) | 機能が4つに増えたときのメニューと画面の並び |
 | [docs/prototypes/](docs/prototypes/) | 実装前に操作感を確かめた試作画面 |
 
 ## 利用者の管理
@@ -129,7 +130,7 @@ docs/               … 要件定義と設計
 ## 現在のフェーズ
 
 [ロードマップ](docs/03-roadmap.md) の **Step 2（予定の基本機能）まで実装済み**。
-次は Step 3（絞り込み）。
+次は Step 2.5（画面の骨組み）と Step 3（絞り込み）。
 
 - ログイン、メンバーの登録（ログイン付き／名前だけ）・削除と復帰・名前の変更
 - カレンダーの月表示・一覧表示、予定の作成・編集・削除・詳細

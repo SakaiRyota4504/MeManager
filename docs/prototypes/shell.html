@@ -1,0 +1,830 @@
+<title>MeManager の画面構成</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #18181b;
+    --muted: #71717a;
+    --line: #e4e4e7;
+    --line-strong: #d4d4d8;
+    --surface: #fafafa;
+    --surface-2: #f4f4f5;
+    --accent: #2563eb;
+    --accent-fg: #ffffff;
+    --accent-soft: #eff6ff;
+    --sun: #dc2626;
+    --sat: #2563eb;
+    /* メンバーの色は pick_member_color() と同じ並び */
+    --m1: #2563eb;
+    --m2: #db2777;
+    --m3: #16a34a;
+    --m4: #ea580c;
+    --ok: #16a34a;
+    --warn: #ca8a04;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #09090b;
+      --ink: #fafafa;
+      --muted: #a1a1aa;
+      --line: #27272a;
+      --line-strong: #3f3f46;
+      --surface: #131316;
+      --surface-2: #17171a;
+      --accent: #60a5fa;
+      --accent-fg: #0b1220;
+      --accent-soft: #16233a;
+      --sun: #f87171;
+      --sat: #60a5fa;
+      --m1: #60a5fa;
+      --m2: #f472b6;
+      --m3: #4ade80;
+      --m4: #fb923c;
+      --ok: #4ade80;
+      --warn: #facc15;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #09090b;
+    --ink: #fafafa;
+    --muted: #a1a1aa;
+    --line: #27272a;
+    --line-strong: #3f3f46;
+    --surface: #131316;
+    --surface-2: #17171a;
+    --accent: #60a5fa;
+    --accent-fg: #0b1220;
+    --accent-soft: #16233a;
+    --sun: #f87171;
+    --sat: #60a5fa;
+    --m1: #60a5fa;
+    --m2: #f472b6;
+    --m3: #4ade80;
+    --m4: #fb923c;
+    --ok: #4ade80;
+    --warn: #facc15;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN",
+      "Noto Sans JP", Meiryo, sans-serif;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding-block: 28px 56px;
+    padding-left: 16px;
+    padding-right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .lead h1 {
+    font-size: 21px;
+    line-height: 1.35;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  .lead p {
+    margin: 0;
+    color: var(--muted);
+    max-width: 62ch;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .seg {
+    display: inline-flex;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .seg button {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 14px;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+  .controls .hint { font-size: 12px; color: var(--muted); }
+
+  /* ── 枠。ここが container なので、ウィンドウを変えなくても
+        スマホ幅の見え方を確かめられる ───────────────────────── */
+  .stage {
+    display: flex;
+    justify-content: center;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+  }
+  .frame {
+    width: 100%;
+    max-width: 100%;
+    container-type: inline-size;
+    background: var(--bg);
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  }
+  .frame.is-phone { width: 390px; }
+
+  .shell { display: flex; flex-direction: column; min-height: 520px; }
+
+  /* ── 上のバー ─────────────────────────────────────────── */
+  .appbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line);
+    min-height: 46px;
+  }
+  .brand { font-weight: 700; letter-spacing: 0.01em; flex: none; }
+  .who {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--muted);
+    flex: none;
+  }
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    display: inline-block;
+    flex: none;
+  }
+
+  /* 機能タブ（広い画面） */
+  .tabs { display: flex; gap: 2px; min-width: 0; }
+  .tabs button {
+    font: inherit;
+    font-size: 13px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 12px 11px 10px;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .tabs button[aria-selected="true"] {
+    color: var(--ink);
+    font-weight: 600;
+    border-bottom-color: var(--accent);
+  }
+  .tabs .soon { opacity: 0.45; }
+
+  /* 画面内のタブ */
+  .subtabs {
+    display: flex;
+    gap: 14px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .subtabs::-webkit-scrollbar { display: none; }
+  .subtabs button {
+    font: inherit;
+    font-size: 12.5px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 8px 1px;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .subtabs button[aria-selected="true"] {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+
+  .content { flex: 1; min-width: 0; }
+  .pad { padding: 12px; }
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    flex-wrap: wrap;
+  }
+  .toolbar h2 {
+    font-size: 15px;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .btn {
+    font: inherit;
+    font-size: 12.5px;
+    padding: 5px 11px;
+    border-radius: 7px;
+    border: 1px solid var(--line-strong);
+    background: none;
+    color: inherit;
+    cursor: pointer;
+  }
+  .btn.primary {
+    background: var(--accent);
+    color: var(--accent-fg);
+    border-color: transparent;
+    font-weight: 600;
+  }
+  .spacer { margin-left: auto; }
+
+  /* 下のバー（狭い画面） */
+  .bottombar {
+    display: none;
+    border-top: 1px solid var(--line);
+    background: var(--bg);
+  }
+  .bottombar button {
+    flex: 1;
+    font: inherit;
+    font-size: 10.5px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 7px 2px calc(7px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-height: 52px;
+  }
+  .bottombar button[aria-selected="true"] { color: var(--accent); }
+  .bottombar svg { width: 21px; height: 21px; flex: none; }
+  .bottombar .soon { opacity: 0.4; }
+
+  @container (max-width: 760px) {
+    .tabs { display: none; }
+    .bottombar { display: flex; }
+    .appbar { min-height: 44px; }
+    .who .fam { display: none; }
+    .shell { min-height: 620px; }
+  }
+
+  /* ── 中身（機能ごとの見本） ───────────────────────────── */
+  .weekhead,
+  .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .weekhead { gap: 1px; }
+  .weekhead div {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 4px 0;
+  }
+  .weekhead div:first-child { color: var(--sun); }
+  .weekhead div:last-child { color: var(--sat); }
+  .grid {
+    gap: 1px;
+    background: var(--line);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .cell {
+    background: var(--bg);
+    min-height: 74px;
+    padding: 3px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .cell.out { background: var(--surface-2); color: var(--muted); }
+  .cell.today { background: var(--accent-soft); }
+  .num {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    align-self: flex-start;
+    padding: 0 4px;
+    border-radius: 999px;
+  }
+  .cell.today .num { background: var(--accent); color: var(--accent-fg); font-weight: 700; }
+  .chip {
+    font-size: 10px;
+    line-height: 1.35;
+    padding: 1px 3px;
+    border-radius: 3px;
+    background: var(--surface-2);
+    border-left: 3px solid var(--accent);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  @container (max-width: 520px) {
+    .chip { white-space: normal; word-break: break-all; }
+    .cell { min-height: 66px; }
+  }
+
+  .rows { display: flex; flex-direction: column; }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    min-width: 0;
+  }
+  .row .main { min-width: 0; flex: 1; }
+  .row .t { display: block; }
+  .row .s { display: block; font-size: 11.5px; color: var(--muted); }
+  .row .amount {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .row .date {
+    font-size: 11.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    width: 38px;
+    flex: none;
+  }
+
+  .summary {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    flex: 1 1 140px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 9px 11px;
+  }
+  .stat .k { font-size: 11.5px; color: var(--muted); }
+  .stat .v {
+    font-size: 19px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .bar {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    margin-top: 7px;
+    overflow: hidden;
+  }
+  .bar span { display: block; height: 100%; background: var(--accent); }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .box {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 1.5px solid var(--line-strong);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    flex: none;
+    color: var(--accent-fg);
+  }
+  .box.on { background: var(--ok); border-color: transparent; }
+  .streak {
+    display: flex;
+    gap: 3px;
+    margin-left: auto;
+    flex: none;
+  }
+  .streak i {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    background: var(--surface-2);
+    display: block;
+  }
+  .streak i.on { background: var(--ok); }
+
+  .meals { display: flex; flex-direction: column; }
+  .meal {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    align-items: baseline;
+  }
+  .meal .d { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .empty {
+    padding: 34px 16px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .tag {
+    display: inline-block;
+    font-size: 10.5px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    padding: 0 7px;
+    color: var(--muted);
+    vertical-align: 1px;
+  }
+
+  /* ── 下の説明 ─────────────────────────────────────────── */
+  .notes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .note {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .note h3 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+  }
+  .note p { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+  .note p:last-child { margin-bottom: 0; }
+  .note strong { color: var(--ink); font-weight: 600; }
+
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; font-size: 13px; min-width: 460px; }
+  th, td { text-align: left; padding: 6px 12px 6px 0; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+  td { border-bottom: 1px solid var(--line); }
+
+  button:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+</style>
+
+<div class="page">
+  <div class="lead">
+    <h1>機能が4つに増えたときの画面</h1>
+    <p>
+スケジュール管理は4つのうちの1つ。習慣・家計簿・献立が入ったときにどこに何が並ぶかを、先に決めておくための試作です。タブを押すと中身が変わります（データは架空のものです）。
+    </p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="画面の幅">
+        <button type="button" id="w-wide" aria-pressed="true">パソコン</button>
+        <button type="button" id="w-phone" aria-pressed="false">スマートフォン</button>
+      </div>
+      <span class="hint">同じ画面が、幅で並び方だけ変わります</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="frame" id="frame">
+      <div class="shell">
+        <header class="appbar">
+          <span class="brand">MeManager</span>
+          <nav class="tabs" id="tabs" aria-label="機能"></nav>
+          <span class="who">
+            <span class="fam">さかい家</span>
+            <span class="dot" style="background: var(--m1)"></span>父
+          </span>
+        </header>
+
+        <nav class="subtabs" id="subtabs" aria-label="画面"></nav>
+        <main class="content" id="content"></main>
+        <nav class="bottombar" id="bottombar" aria-label="機能"></nav>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h3>メニューはどこにあるか</h3>
+      <p>
+<strong>パソコンは上のタブ、スマートフォンは下のバー。</strong>左に縦のメニューを置くとカレンダーの横幅をそのぶん失うので、置きません。片手で持つスマートフォンでは、画面の上端より下端のほうが押しやすいので下に出します。
+      </p>
+      <p>
+機能は最大5つ（4機能＋設定）。これ以上増やさない前提の作りです。
+      </p>
+    </div>
+    <div class="note">
+      <h3>機能の中の画面</h3>
+      <p>
+家計簿や献立は画面が1つでは足りません。<strong>機能の中の行き先は、その下の細いタブ</strong>に並べます。上下2段にすることで、いま何の機能のどこにいるかが常に見えます。
+      </p>
+      <p>スケジュールは今のところ「カレンダー」だけなので、1段で足ります。</p>
+    </div>
+    <div class="note">
+      <h3>作っていない機能の扱い</h3>
+      <p>
+<strong>まだ無い機能は、メニューにも出しません。</strong>押しても何も起きないタブが並ぶと、壊れているように見えるためです。この試作では、これから作るものを薄く出しています。
+      </p>
+      <p>機能が1つの間はタブ自体を出さず、いまの見た目のままにします。</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <h3>画面の住所（URL）</h3>
+    <p>
+機能ごとに区切っておきます。今のうちに決めておくと、あとから増やすときに迷いません。
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>機能</th><th>URL</th><th>中の画面</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>スケジュール</td><td><code>/schedule</code></td><td>カレンダー、取り込み履歴</td></tr>
+          <tr><td>習慣</td><td><code>/habits</code></td><td>今日、記録</td></tr>
+          <tr><td>家計簿</td><td><code>/budget</code></td><td>入力、一覧、集計、予算</td></tr>
+          <tr><td>献立</td><td><code>/meals</code></td><td>献立、レシピ、買い物</td></tr>
+          <tr><td>設定</td><td><code>/settings</code></td><td>メンバー、家族、表示</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  const ICONS = {
+    schedule:
+      '<path d="M7 3v3M17 3v3M3.5 9h17M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v12A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V7A1.5 1.5 0 0 1 5 5.5Z"/>',
+    habits:
+      '<path d="M4 12.5 9 17.5 20 6.5"/><path d="M4 6.5 6.5 9"/>',
+    budget:
+      '<path d="M3.5 7.5h17v11h-17z"/><path d="M3.5 11h17"/><circle cx="16.5" cy="15" r="1.4"/>',
+    meals:
+      '<path d="M7 3.5v8M4.5 3.5v4a2.5 2.5 0 0 0 5 0v-4"/><path d="M16.5 3.5c-1.5 1.5-2 3.5-2 6h4c0-2.5-.5-4.5-2-6Z"/><path d="M7 11.5v9M16.5 9.5v11"/>',
+    settings:
+      '<circle cx="12" cy="12" r="3"/><path d="M12 3.5v2M12 18.5v2M20.5 12h-2M5.5 12h-2M18 6l-1.5 1.5M7.5 16.5 6 18M18 18l-1.5-1.5M7.5 7.5 6 6"/>',
+  };
+
+  const FEATURES = [
+    { id: "schedule", label: "スケジュール", ready: true, subs: ["カレンダー", "取り込み履歴"] },
+    { id: "habits", label: "習慣", ready: false, subs: ["今日", "記録"] },
+    { id: "budget", label: "家計簿", ready: false, subs: ["入力", "一覧", "集計", "予算"] },
+    { id: "meals", label: "献立", ready: false, subs: ["献立", "レシピ", "買い物"] },
+    { id: "settings", label: "設定", ready: true, subs: ["メンバー", "家族", "表示"] },
+  ];
+
+  const state = { feature: "schedule", sub: 0 };
+
+  const tabs = document.getElementById("tabs");
+  const bottombar = document.getElementById("bottombar");
+  const subtabs = document.getElementById("subtabs");
+  const content = document.getElementById("content");
+  const frame = document.getElementById("frame");
+
+  function icon(id) {
+    return (
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" ' +
+      'aria-hidden="true">' + ICONS[id] + "</svg>"
+    );
+  }
+
+  function renderNav() {
+    tabs.innerHTML = FEATURES.map(
+      (f) =>
+        '<button type="button" role="tab" data-id="' + f.id + '"' +
+        ' aria-selected="' + (state.feature === f.id) + '"' +
+        (f.ready ? "" : ' class="soon"') + ">" + f.label +
+        (f.ready ? "" : ' <span class="tag">これから</span>') + "</button>",
+    ).join("");
+
+    bottombar.innerHTML = FEATURES.map(
+      (f) =>
+        '<button type="button" role="tab" data-id="' + f.id + '"' +
+        ' aria-selected="' + (state.feature === f.id) + '"' +
+        (f.ready ? "" : ' class="soon"') + ">" + icon(f.id) +
+        "<span>" + f.label + "</span></button>",
+    ).join("");
+
+    const feature = FEATURES.find((f) => f.id === state.feature);
+    subtabs.innerHTML = feature.subs
+      .map(
+        (s, i) =>
+          '<button type="button" role="tab" data-sub="' + i + '"' +
+          ' aria-selected="' + (state.sub === i) + '">' + s + "</button>",
+      )
+      .join("");
+  }
+
+  const SCREENS = {
+    schedule: () => `
+      <div class="toolbar">
+        <button class="btn" type="button">‹</button>
+        <button class="btn" type="button">›</button>
+        <h2>2026年9月</h2>
+        <button class="btn spacer" type="button">一覧</button>
+      </div>
+      <div class="pad" style="padding-top:0">
+        <button class="btn primary" type="button">＋ 予定を追加</button>
+      </div>
+      <div class="weekhead"><div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div></div>
+      <div class="grid">
+        ${monthCells()}
+      </div>`,
+
+    habits: () => `
+      <div class="toolbar">
+        <h2>9月17日（木）</h2>
+        <span class="spacer" style="font-size:12px;color:var(--muted)">4件中2件</span>
+      </div>
+      <div class="rows">
+        ${habit("はみがき", "たろう", "--m3", true, 6)}
+        ${habit("音読", "たろう", "--m3", true, 4)}
+        ${habit("ストレッチ", "父", "--m1", false, 3)}
+        ${habit("家計簿をつける", "母", "--m2", false, 5)}
+      </div>
+      <p class="empty">続いた日数は、右の四角で7日ぶん見えます。</p>`,
+
+    budget: () => `
+      <div class="summary">
+        <div class="stat">
+          <span class="k">9月の支出</span>
+          <span class="v">182,400<span style="font-size:12px;font-weight:400">円</span></span>
+          <span class="bar"><span style="width:73%"></span></span>
+          <span class="k">予算 250,000円 の 73%</span>
+        </div>
+        <div class="stat">
+          <span class="k">食費</span>
+          <span class="v">61,200<span style="font-size:12px;font-weight:400">円</span></span>
+          <span class="bar"><span style="width:88%;background:var(--warn)"></span></span>
+          <span class="k">予算 70,000円 の 88%</span>
+        </div>
+      </div>
+      <div class="rows">
+        ${spend("9/16", "スーパー", "食費・母", "4,280")}
+        ${spend("9/15", "ガソリン", "車・父", "6,500")}
+        ${spend("9/14", "たろう 靴", "衣類・母", "3,900")}
+        ${spend("9/13", "電気代", "光熱費", "12,640")}
+      </div>`,
+
+    meals: () => `
+      <div class="toolbar">
+        <h2>9月15日の週</h2>
+        <button class="btn spacer" type="button">買い物リストを作る</button>
+      </div>
+      <div class="meals">
+        ${meal("月 15", "鮭の塩焼き、味噌汁、ほうれん草")}
+        ${meal("火 16", "カレー（多めに作る）")}
+        ${meal("水 17", "カレーの残り、サラダ")}
+        ${meal("木 18", "鶏の照り焼き、冷奴")}
+        ${meal("金 19", "外食（たろうの誕生日）")}
+      </div>`,
+
+    settings: () => `
+      <div class="rows">
+        ${member("父", "--m1", "管理者")}
+        ${member("母", "--m2", "メンバー")}
+        ${member("たろう", "--m3", "ログインなし")}
+        ${member("はなこ", "--m4", "ログインなし")}
+      </div>
+      <div class="pad">
+        <button class="btn" type="button">メンバーを追加する</button>
+      </div>`,
+  };
+
+  function monthCells() {
+    const events = {
+      3: [["練習試合", "--m3"]],
+      7: [["授業参観", "--m2"]],
+      11: [["ピアノ教室", "--m4"]],
+      14: [["町内会", "--m1"]],
+      17: [["歯医者 16:00", "--m2"], ["サッカー", "--m3"]],
+      19: [["たろう誕生日", "--m3"]],
+      23: [["秋分の日", "--m1"]],
+      26: [["リーグ第5節", "--m3"]],
+    };
+    let html = "";
+    for (let i = 0; i < 35; i++) {
+      const day = i - 1; // 2026-09-01 は火曜
+      const inMonth = day >= 1 && day <= 30;
+      const cls =
+        "cell" + (inMonth ? "" : " out") + (day === 17 ? " today" : "");
+      const label = inMonth ? day : day < 1 ? 31 + day : day - 30;
+      const list = (inMonth && events[day]) || [];
+      html +=
+        '<div class="' + cls + '"><span class="num">' + label + "</span>" +
+        list
+          .map(
+            (e) =>
+              '<span class="chip" style="border-left-color: var(' + e[1] + ')">' +
+              e[0] + "</span>",
+          )
+          .join("") +
+        "</div>";
+    }
+    return html;
+  }
+
+  function habit(name, who, color, done, streak) {
+    let dots = "";
+    for (let i = 0; i < 7; i++) {
+      dots += '<i class="' + (i < streak ? "on" : "") + '"></i>';
+    }
+    return `
+      <div class="check">
+        <span class="box ${done ? "on" : ""}">${done ? "✓" : ""}</span>
+        <span class="main">
+          <span class="t">${name}</span>
+          <span class="s"><span class="dot" style="background: var(${color})"></span> ${who}</span>
+        </span>
+        <span class="streak">${dots}</span>
+      </div>`;
+  }
+
+  function spend(date, title, sub, amount) {
+    return `
+      <div class="row">
+        <span class="date">${date}</span>
+        <span class="main"><span class="t">${title}</span><span class="s">${sub}</span></span>
+        <span class="amount">${amount}円</span>
+      </div>`;
+  }
+
+  function meal(day, text) {
+    return '<div class="meal"><span class="d">' + day + "</span><span>" + text + "</span></div>";
+  }
+
+  function member(name, color, role) {
+    return `
+      <div class="row">
+        <span class="main">
+          <span class="t"><span class="dot" style="background: var(${color})"></span> ${name}</span>
+        </span>
+        <span class="s">${role}</span>
+      </div>`;
+  }
+
+  function render() {
+    renderNav();
+    const feature = FEATURES.find((f) => f.id === state.feature);
+    content.innerHTML =
+      state.sub === 0
+        ? SCREENS[state.feature]()
+        : '<p class="empty">「' + feature.subs[state.sub] +
+          "」の画面。ここでは中身までは作っていません。</p>";
+  }
+
+  function pickFeature(id) {
+    state.feature = id;
+    state.sub = 0;
+    render();
+  }
+
+  tabs.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (b) pickFeature(b.dataset.id);
+  });
+  bottombar.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (b) pickFeature(b.dataset.id);
+  });
+  subtabs.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    state.sub = Number(b.dataset.sub);
+    render();
+  });
+
+  const wide = document.getElementById("w-wide");
+  const phone = document.getElementById("w-phone");
+  function setWidth(isPhone) {
+    frame.classList.toggle("is-phone", isPhone);
+    wide.setAttribute("aria-pressed", String(!isPhone));
+    phone.setAttribute("aria-pressed", String(isPhone));
+  }
+  wide.addEventListener("click", () => setWidth(false));
+  phone.addEventListener("click", () => setWidth(true));
+
+  render();
+</script>
