@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { toIso } from "@/lib/calendar/date";
 
 export type EventFormState = { error: string } | { ok: true } | null;
 
@@ -24,8 +25,8 @@ function toJapaneseMessage(message: string): string {
 /** フォームの入力を、DB関数に渡す形に整える */
 function buildPayload(formData: FormData) {
   const allDay = formData.get("all_day") === "on";
-  const date = String(formData.get("date") ?? "");
-  const endDate = String(formData.get("end_date") ?? "") || date;
+  const startDate = String(formData.get("start_date") ?? "");
+  const endDate = String(formData.get("end_date") ?? "") || startDate;
   const assignees = formData.getAll("assignees").map(String).filter(Boolean);
 
   const base: Record<string, unknown> = {
@@ -39,25 +40,26 @@ function buildPayload(formData: FormData) {
   };
 
   if (allDay) {
-    return { ...base, start_date: date, end_date: endDate };
+    return { ...base, start_date: startDate, end_date: endDate };
   }
 
-  // ブラウザのローカル時刻として解釈し、ISO（UTC）にしてから送る。
   const start = String(formData.get("start_time") ?? "09:00");
   const end = String(formData.get("end_time") ?? "10:00");
   return {
     ...base,
-    starts_at: new Date(`${date}T${start}:00`).toISOString(),
-    ends_at: new Date(`${endDate}T${end}:00`).toISOString(),
+    starts_at: toIso(startDate, start),
+    ends_at: toIso(endDate, end),
   };
 }
 
 function validate(payload: Record<string, unknown>): string | null {
-  if (!payload.calendar_id) return "カレンダーを選んでください";
+  if (!payload.calendar_id) return "カレンダーが特定できません";
   if (!payload.title) return "タイトルを入力してください";
   if ((payload.assignees as string[]).length === 0) {
     return "担当者を1人以上選んでください";
   }
+  const start = (payload.start_date ?? payload.starts_at) as string | undefined;
+  if (!start) return "開始の日付を入力してください";
   return null;
 }
 

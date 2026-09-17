@@ -66,8 +66,30 @@ export function monthRange(month: string, weekStart = 0) {
   return { fromDate: toDateKey(from), toDate: toDateKey(to) };
 }
 
+/**
+ * このアプリが扱う時間帯。表示も入力もここに固定する。
+ *
+ * 端末の設定に合わせない。旅行先で入力した予定が家族には別の時刻に
+ * 見える、という事故を避けるため。
+ */
+export const APP_TIME_ZONE = "Asia/Tokyo";
+
+/** 夏時間が無いので固定の値で足りる。時間帯を変えるならここも見直す */
+const APP_UTC_OFFSET = "+09:00";
+
+/**
+ * 入力欄の「日付」と「時刻」を、ISO（UTC）の文字列にする。
+ *
+ * `new Date("2026-09-17T09:00")` は**動いている場所の時間帯**で解釈される。
+ * 保存の処理はサーバー（UTC）で動くので、そのままだと9時間ずれる。
+ * 時間帯を明示して取り違えを断つ。
+ */
+export function toIso(date: string, time: string): string {
+  return new Date(`${date}T${time}:00${APP_UTC_OFFSET}`).toISOString();
+}
+
 /** 時刻付き予定の表示。26:00 のような24時以降は翌日の時刻に直す */
-export function formatTime(iso: string, timeZone = "Asia/Tokyo"): string {
+export function formatTime(iso: string, timeZone = APP_TIME_ZONE): string {
   return new Intl.DateTimeFormat("ja-JP", {
     hour: "2-digit",
     minute: "2-digit",
@@ -77,7 +99,7 @@ export function formatTime(iso: string, timeZone = "Asia/Tokyo"): string {
 }
 
 /** 時刻付き予定が、表示上どの日付に属するか */
-export function eventDateKey(iso: string, timeZone = "Asia/Tokyo"): string {
+export function eventDateKey(iso: string, timeZone = APP_TIME_ZONE): string {
   // en-CA は YYYY-MM-DD 形式を返す
   return new Intl.DateTimeFormat("en-CA", {
     year: "numeric",

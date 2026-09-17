@@ -40,14 +40,10 @@ export function CalendarView({
   const router = useRouter();
   const today = todayKey();
 
-  // スマートフォンの既定は一覧表示（要件 FR-V04）。
-  // 狭い画面でマスに詰め込むより、時系列に並べたほうが読める。
-  const [view, setView] = useState<View>(() =>
-    typeof window !== "undefined" &&
-    window.matchMedia("(max-width: 900px)").matches
-      ? "list"
-      : "month",
-  );
+  // 既定は画面幅によらず月表示。
+  // 「今月どうなっているか」を最初に見たいので、まずカレンダーを出す。
+  // 一覧は切り替えで出す（狭い画面では件数の多い日を読むのに使う）。
+  const [view, setView] = useState<View>("month");
   const [editing, setEditing] = useState<
     | { mode: "create"; date: string }
     | { mode: "edit"; event: EventWithAssignees }
@@ -83,8 +79,8 @@ export function CalendarView({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-3 py-3">
+      <div className="flex flex-wrap items-center gap-2 px-3">
         <button
           type="button"
           onClick={() => go(-1)}
@@ -129,13 +125,15 @@ export function CalendarView({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setEditing({ mode: "create", date: today })}
-        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-fg"
-      >
-        ＋ 予定を追加
-      </button>
+      <div className="px-3">
+        <button
+          type="button"
+          onClick={() => setEditing({ mode: "create", date: today })}
+          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-fg"
+        >
+          ＋ 予定を追加
+        </button>
+      </div>
 
       {view === "month" ? (
         <div>
@@ -220,7 +218,6 @@ export function CalendarView({
         <EventDetail
           event={detail}
           members={members}
-          calendars={calendars}
           onClose={() => setDetail(null)}
           onEdit={() => {
             setEditing({ mode: "edit", event: detail });
@@ -233,7 +230,6 @@ export function CalendarView({
         <EventPanel
           key={editing.mode === "edit" ? editing.event.id : editing.date}
           members={members}
-          calendars={calendars}
           defaultCalendarId={defaultCalendar.id}
           selfMemberId={selfMemberId}
           initial={editing}
@@ -267,14 +263,14 @@ function EventList({
 
   if (keys.length === 0) {
     return (
-      <p className="py-12 text-center text-sm text-muted">
+      <p className="px-3 py-12 text-center text-sm text-muted">
         この月の予定はまだありません。
       </p>
     );
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col px-3">
       {keys.map((key) => {
         const [, m, d] = key.split("-");
         const wd = WEEKDAYS[new Date(key + "T00:00:00").getDay()];

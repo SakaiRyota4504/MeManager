@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 
-import type { Calendar, Member } from "@/lib/supabase/types";
+import type { Member } from "@/lib/supabase/types";
 import type { EventWithAssignees } from "@/lib/calendar/model";
 import { eventDateKey, formatTime } from "@/lib/calendar/date";
 import { Field, FormError, SubmitButton } from "@/components/form";
@@ -14,7 +14,6 @@ type Initial =
 
 export function EventPanel({
   members,
-  calendars,
   defaultCalendarId,
   selfMemberId,
   initial,
@@ -22,7 +21,6 @@ export function EventPanel({
   onSaved,
 }: {
   members: Member[];
-  calendars: Calendar[];
   defaultCalendarId: string;
   selfMemberId: string;
   initial: Initial;
@@ -37,6 +35,40 @@ export function EventPanel({
   );
 
   const [allDay, setAllDay] = useState(editing?.all_day ?? false);
+
+  // 開始・終了は常に出す。既定は「押した日」で、時刻は 9:00〜10:00。
+  const touched = initial.mode === "create" ? initial.date : "";
+  const [startDate, setStartDate] = useState(
+    editing
+      ? editing.all_day
+        ? (editing.start_date ?? "")
+        : eventDateKey(editing.starts_at!, editing.timezone)
+      : touched,
+  );
+  const [endDate, setEndDate] = useState(
+    editing
+      ? editing.all_day
+        ? (editing.end_date ?? editing.start_date ?? "")
+        : eventDateKey(editing.ends_at!, editing.timezone)
+      : touched,
+  );
+  const [startTime, setStartTime] = useState(
+    editing && !editing.all_day
+      ? formatTime(editing.starts_at!, editing.timezone)
+      : "09:00",
+  );
+  const [endTime, setEndTime] = useState(
+    editing && !editing.all_day
+      ? formatTime(editing.ends_at!, editing.timezone)
+      : "10:00",
+  );
+
+  // 開始日を動かしたとき、終了日が同じ日か前の日なら一緒に動かす。
+  // 「終了が開始より前」で保存に失敗するのを、入力の側で防ぐ。
+  const changeStartDate = (value: string) => {
+    if (endDate === startDate || endDate < value) setEndDate(value);
+    setStartDate(value);
+  };
   // 担当者の初期値は作成者自身（FR-M04）。そのままでよければ操作は要らない。
   const [picked, setPicked] = useState<string[]>(
     editing ? editing.assignees : [selfMemberId],
@@ -53,25 +85,6 @@ export function EventPanel({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  const startDate = editing
-    ? editing.all_day
-      ? (editing.start_date ?? "")
-      : eventDateKey(editing.starts_at!, editing.timezone)
-    : initial.mode === "create"
-      ? initial.date
-      : "";
-  const endDate = editing?.all_day
-    ? (editing.end_date ?? startDate)
-    : startDate;
-  const startTime =
-    editing && !editing.all_day
-      ? formatTime(editing.starts_at!, editing.timezone)
-      : "09:00";
-  const endTime =
-    editing && !editing.all_day
-      ? formatTime(editing.ends_at!, editing.timezone)
-      : "10:00";
 
   const toggle = (id: string) =>
     setPicked((prev) =>
@@ -174,14 +187,6 @@ export function EventPanel({
               )}
             </div>
 
-            <Field
-              label="日付"
-              name="date"
-              type="date"
-              required
-              defaultValue={startDate}
-            />
-
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -191,33 +196,31 @@ export function EventPanel({
                 onChange={(e) => setAllDay(e.target.checked)}
                 className="size-4 accent-accent"
               />
-              終日
+              終日（時刻を決めない）
             </label>
 
-            {allDay ? (
-              <Field
-                label="終了日"
-                name="end_date"
-                type="date"
-                defaultValue={endDate}
-                hint="同じ日なら空欄のままで構いません"
+            <div className="space-y-3">
+              <DateTimeRow
+                label="開始"
+                dateName="start_date"
+                timeName="start_time"
+                date={startDate}
+                time={startTime}
+                onDateChange={changeStartDate}
+                onTimeChange={setStartTime}
+                allDay={allDay}
               />
-            ) : (
-              <div className="flex gap-2">
-                <Field
-                  label="開始"
-                  name="start_time"
-                  type="time"
-                  defaultValue={startTime}
-                />
-                <Field
-                  label="終了"
-                  name="end_time"
-                  type="time"
-                  defaultValue={endTime}
-                />
-              </div>
-            )}
+              <DateTimeRow
+                label="終了"
+                dateName="end_date"
+                timeName="end_time"
+                date={endDate}
+                time={endTime}
+                onDateChange={setEndDate}
+                onTimeChange={setEndTime}
+                allDay={allDay}
+              />
+            </div>
 
             <Field
               label="場所"
@@ -226,20 +229,12 @@ export function EventPanel({
               placeholder="市民センター"
             />
 
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium">カレンダー</span>
-              <select
-                name="calendar_id"
-                defaultValue={editing?.calendar_id ?? defaultCalendarId}
-                className="w-full rounded-md border border-border-strong bg-background px-3 py-2 text-sm"
-              >
-                {calendars.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {/* カレンダーは「家族共有」1つだけを使う。選ばせない */}
+            <input
+              type="hidden"
+              name="calendar_id"
+              value={editing?.calendar_id ?? defaultCalendarId}
+            />
 
             <label className="block space-y-1.5">
               <span className="text-sm font-medium">状態</span>
@@ -280,5 +275,60 @@ export function EventPanel({
         </form>
       </section>
     </>
+  );
+}
+
+/**
+ * 「日付＋時刻」の1行。開始と終了で同じ形にする。
+ *
+ * 終日でも日付の欄は出したまま、時刻だけを止める。
+ * 切り替えるたびに欄が入れ替わると、どこを触っていたか分からなくなるため。
+ */
+function DateTimeRow({
+  label,
+  dateName,
+  timeName,
+  date,
+  time,
+  onDateChange,
+  onTimeChange,
+  allDay,
+}: {
+  label: string;
+  dateName: string;
+  timeName: string;
+  date: string;
+  time: string;
+  onDateChange: (value: string) => void;
+  onTimeChange: (value: string) => void;
+  allDay: boolean;
+}) {
+  const box =
+    "min-w-0 rounded-md border border-border px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30";
+
+  return (
+    <div className="space-y-1.5">
+      <span className="text-sm font-medium">{label}</span>
+      <div className="flex gap-2">
+        <input
+          type="date"
+          name={dateName}
+          value={date}
+          onChange={(e) => onDateChange(e.target.value)}
+          required
+          aria-label={`${label}の日付`}
+          className={`flex-1 ${box}`}
+        />
+        <input
+          type="time"
+          name={timeName}
+          value={time}
+          onChange={(e) => onTimeChange(e.target.value)}
+          disabled={allDay}
+          aria-label={`${label}の時刻`}
+          className={`w-28 shrink-0 ${box} disabled:opacity-40`}
+        />
+      </div>
+    </div>
   );
 }

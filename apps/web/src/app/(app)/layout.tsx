@@ -9,7 +9,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <>
       <header className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-6 py-3">
+        <div className="flex w-full items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-4">
             <Link href="/calendar" className="font-semibold">
               MeManager
@@ -43,9 +43,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </div>
         </div>
       </header>
-      <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-8">
-        {children}
-      </div>
+      {/* 左右の余白は画面ごとに決める。
+          カレンダーは端まで使い、それ以外は読みやすい幅で中央に寄せる。 */}
+      <div className="w-full flex-1">{children}</div>
     </>
   );
 }

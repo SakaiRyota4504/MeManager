@@ -135,8 +135,11 @@ docs/               … 要件定義と設計
 - カレンダーの月表示・一覧表示、予定の作成・編集・削除・詳細
 - 担当者の色分け、確定／仮／中止の表示
 
+カレンダーは画面の端まで使う。既定は月表示。
+予定の入力は開始・終了を常に同じ位置に出し、押した日付が初期値に入る。
+
 DB スキーマと RLS は `supabase/tests/run.sh` で検証済み（51項目）。
-日付計算は `pnpm test` で検証済み（13項目）。
+日付計算は `pnpm test` で検証済み（16項目）。
 画面の作りは [試作](docs/prototypes/calendar.html)をなぞっている。
 
 未決定事項は [docs/02-schedule-requirements.md](docs/02-schedule-requirements.md) の

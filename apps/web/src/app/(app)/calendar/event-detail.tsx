@@ -4,9 +4,9 @@ import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 
-import type { Calendar, Member } from "@/lib/supabase/types";
+import type { Member } from "@/lib/supabase/types";
 import type { EventWithAssignees } from "@/lib/calendar/model";
-import { formatTime } from "@/lib/calendar/date";
+import { eventDateKey, formatTime } from "@/lib/calendar/date";
 import { deleteEvent, type EventFormState } from "./actions";
 
 const STATUS_LABEL = {
@@ -18,13 +18,11 @@ const STATUS_LABEL = {
 export function EventDetail({
   event,
   members,
-  calendars,
   onClose,
   onEdit,
 }: {
   event: EventWithAssignees;
   members: Member[];
-  calendars: Calendar[];
   onClose: () => void;
   onEdit: () => void;
 }) {
@@ -50,16 +48,12 @@ export function EventDetail({
   }, [onClose]);
 
   const assignees = members.filter((m) => event.assignees.includes(m.id));
-  const calendar = calendars.find((c) => c.id === event.calendar_id);
 
   const when = event.all_day
     ? event.start_date === event.end_date
       ? `${event.start_date} 終日`
       : `${event.start_date} 〜 ${event.end_date} 終日`
-    : `${formatTime(event.starts_at!, event.timezone)} 〜 ${formatTime(
-        event.ends_at!,
-        event.timezone,
-      )}`;
+    : whenTimed(event);
 
   return (
     <>
@@ -108,9 +102,6 @@ export function EventDetail({
                 </span>
               ))}
             </dd>
-
-            <dt className="text-muted">カレンダー</dt>
-            <dd>{calendar?.name ?? "—"}</dd>
 
             <dt className="text-muted">状態</dt>
             <dd>{STATUS_LABEL[event.status]}</dd>
@@ -165,4 +156,15 @@ function DeleteButton() {
       {pending ? "削除中…" : "削除"}
     </button>
   );
+}
+
+/** 時刻付きの予定。日をまたぐときは終わりの日付も出す */
+function whenTimed(event: EventWithAssignees): string {
+  const startDay = eventDateKey(event.starts_at!, event.timezone);
+  const endDay = eventDateKey(event.ends_at!, event.timezone);
+  const start = formatTime(event.starts_at!, event.timezone);
+  const end = formatTime(event.ends_at!, event.timezone);
+  return startDay === endDay
+    ? `${startDay} ${start} 〜 ${end}`
+    : `${startDay} ${start} 〜 ${endDay} ${end}`;
 }

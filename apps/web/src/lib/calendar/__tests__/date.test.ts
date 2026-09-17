@@ -4,10 +4,12 @@ import {
   allDayKeys,
   eventDateKey,
   formatMonth,
+  formatTime,
   monthGridDays,
   monthRange,
   shiftMonth,
   toDateKey,
+  toIso,
   toMonthKey,
 } from "../date";
 
@@ -97,5 +99,24 @@ describe("日付キー", () => {
   it("1桁の月日は0で埋める", () => {
     expect(toDateKey(new Date(2026, 0, 5))).toBe("2026-01-05");
     expect(toMonthKey(new Date(2026, 0, 5))).toBe("2026-01");
+  });
+});
+
+describe("入力欄の日時から ISO への変換", () => {
+  // 保存の処理はサーバー（UTC）で動くので、
+  // new Date("...T09:00") に頼ると9時間ずれる。
+  it("入力は日本時間として読む", () => {
+    expect(toIso("2026-09-17", "09:00")).toBe("2026-09-17T00:00:00.000Z");
+    expect(toIso("2026-09-17", "00:00")).toBe("2026-09-16T15:00:00.000Z");
+  });
+
+  it("日付をまたぐ時刻も正しく繰り上がる", () => {
+    expect(toIso("2026-12-31", "23:30")).toBe("2026-12-31T14:30:00.000Z");
+  });
+
+  it("元の時刻に戻せる", () => {
+    const iso = toIso("2026-09-17", "18:45");
+    expect(formatTime(iso, "Asia/Tokyo")).toBe("18:45");
+    expect(eventDateKey(iso, "Asia/Tokyo")).toBe("2026-09-17");
   });
 });
