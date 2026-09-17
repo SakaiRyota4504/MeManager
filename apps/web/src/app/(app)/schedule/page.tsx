@@ -8,7 +8,7 @@ import { CalendarView } from "./calendar-view";
 
 export const dynamic = "force-dynamic";
 
-export default async function CalendarPage(props: PageProps<"/calendar">) {
+export default async function SchedulePage(props: PageProps<"/schedule">) {
   const session = await requireSession();
   const params = await props.searchParams;
 
@@ -36,7 +36,7 @@ export default async function CalendarPage(props: PageProps<"/calendar">) {
 
   // 既定のカレンダーが無い状態は、家族の作成時に必ず作るので起きない。
   // 念のため何も無ければメンバー画面へ戻す。
-  if (!calendars || calendars.length === 0) redirect("/members");
+  if (!calendars || calendars.length === 0) redirect("/settings/members");
 
   return (
     <CalendarView

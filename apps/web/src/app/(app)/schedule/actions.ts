@@ -75,7 +75,7 @@ export async function createEvent(
   const { error } = await supabase.rpc("create_event", { payload });
   if (error) return { error: toJapaneseMessage(error.message) };
 
-  revalidatePath("/calendar");
+  revalidatePath("/schedule");
   return { ok: true };
 }
 
@@ -97,7 +97,7 @@ export async function updateEvent(
   });
   if (error) return { error: toJapaneseMessage(error.message) };
 
-  revalidatePath("/calendar");
+  revalidatePath("/schedule");
   return { ok: true };
 }
 
@@ -114,6 +114,6 @@ export async function deleteEvent(
   });
   if (error) return { error: toJapaneseMessage(error.message) };
 
-  revalidatePath("/calendar");
+  revalidatePath("/schedule");
   return { ok: true };
 }

@@ -73,7 +73,7 @@ export async function addMember(
       login_email: email || null,
     });
     if (error) return { error: toJapaneseMessage(error.message) };
-    revalidatePath("/members");
+    revalidatePath("/settings/members");
     return {
       ok: true,
       message: email
@@ -147,7 +147,7 @@ async function attachAccount(
     return { error: toJapaneseMessage(createError.message) };
   }
 
-  revalidatePath("/members");
+  revalidatePath("/settings/members");
   return { ok: true, message: `${email} でログインできるようになりました` };
 }
 
@@ -164,7 +164,7 @@ export async function deactivateMember(
   });
   if (error) return { error: toJapaneseMessage(error.message) };
 
-  revalidatePath("/members");
+  revalidatePath("/settings/members");
   return { ok: true };
 }
 
@@ -181,7 +181,7 @@ export async function reactivateMember(
   });
   if (error) return { error: toJapaneseMessage(error.message) };
 
-  revalidatePath("/members");
+  revalidatePath("/settings/members");
   return { ok: true };
 }
 
@@ -214,8 +214,8 @@ export async function renameMember(
     return { error: "この人の表示名を変える権限がありません" };
   }
 
-  revalidatePath("/members");
-  revalidatePath("/calendar");
+  revalidatePath("/settings/members");
+  revalidatePath("/schedule");
   return { ok: true };
 }
 

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { checkDatabaseConnection } from "@/lib/supabase/health";
 import { getSession } from "@/lib/auth/session";
+import { HOME } from "@/lib/nav/features";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export default async function Home() {
 
   if (configured) {
     const session = await getSession();
-    if (session) redirect("/calendar");
+    if (session) redirect(HOME);
   }
 
   const connection = configured ? await checkDatabaseConnection() : null;

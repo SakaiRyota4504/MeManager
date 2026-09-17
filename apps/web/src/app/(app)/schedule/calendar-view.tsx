@@ -59,7 +59,7 @@ export function CalendarView({
   const defaultCalendar = calendars.find((c) => c.is_default) ?? calendars[0];
 
   const go = (delta: number) => {
-    router.push(`/calendar?month=${shiftMonth(month, delta)}`);
+    router.push(`/schedule?month=${shiftMonth(month, delta)}`);
   };
 
   const weekdayLabels = Array.from(
@@ -101,7 +101,7 @@ export function CalendarView({
         <button
           type="button"
           onClick={() =>
-            router.push(`/calendar?month=${toMonthKey(new Date())}`)
+            router.push(`/schedule?month=${toMonthKey(new Date())}`)
           }
           className="rounded-md border border-border-strong px-3 py-1 text-sm"
         >

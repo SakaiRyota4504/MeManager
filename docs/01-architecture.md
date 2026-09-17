@@ -81,7 +81,7 @@ Supabase Auth を使う。自前でパスワードをハッシュ化して保存
 
 - 方式: メールアドレス + パスワード
 - セッション: `@supabase/ssr` によるCookieベースのセッション管理
-- 家族への追加: 招待リンク（有効期限つきトークン）
+- 家族への追加: **管理者が登録する**（アプリにサインアップ画面は置かない）
 - Google ログイン等の外部IdPは、Supabase の設定で後から追加できる。初期は実装しない
 
 ### 4.2 認可は RLS（Row Level Security）で行う
@@ -125,28 +125,40 @@ Supabase Realtime で `events` テーブルの変更を購読する。
 
 ## 5. ディレクトリ構成（案）
 
+画面は**機能ごとに区切る**。並べ方は [06-app-shell.md](06-app-shell.md)。
+
 ```
 memanager/
 ├─ apps/
-│  ├─ web/                  … Next.js アプリ（ウェブ＆デスクトップ共通の画面）
+│  ├─ web/src/
 │  │  ├─ app/
-│  │  │  ├─ (auth)/         … ログイン・サインアップ・招待受諾
-│  │  │  ├─ calendar/       … カレンダー画面
-│  │  │  ├─ import/         … 一括インポート画面
-│  │  │  ├─ settings/       … 設定
+│  │  │  ├─ (auth)/         … ログイン
+│  │  │  ├─ (app)/          … ログイン後。ここだけがメニューを持つ
+│  │  │  │  ├─ layout.tsx   … メニューを並べる場所
+│  │  │  │  ├─ schedule/    … スケジュール管理
+│  │  │  │  ├─ habits/      … 習慣管理（これから）
+│  │  │  │  ├─ budget/      … 家計簿（これから）
+│  │  │  │  ├─ meals/       … 献立管理（これから）
+│  │  │  │  └─ settings/    … 設定（メンバーなど）
 │  │  │  └─ api/            … Route Handler（繰り返し展開・インポート処理）
-│  │  ├─ components/
+│  │  ├─ components/        … 画面をまたいで使う部品（フォーム、メニュー）
 │  │  ├─ lib/
+│  │  │  ├─ nav/            … 機能の一覧。メニューはここから作る
 │  │  │  ├─ supabase/       … クライアント生成、型定義
-│  │  │  ├─ recurrence/     … 繰り返し予定の展開
-│  │  │  └─ import/         … ics / CSV の解析
-│  │  └─ types/
-│  └─ desktop/              … Tauri（Rust）のシェルとネイティブ機能
+│  │  │  ├─ calendar/       … 日付の計算
+│  │  │  ├─ recurrence/     … 繰り返し予定の展開（これから）
+│  │  │  └─ import/         … ics / CSV の解析（これから）
+│  │  └─ proxy.ts           … セッション更新（Next.js 16 で middleware から改名）
+│  └─ desktop/              … Tauri（Rust）のシェルとネイティブ機能（これから）
 ├─ supabase/
 │  ├─ migrations/           … DBスキーマのマイグレーション
-│  └─ seed.sql
+│  ├─ schema.sql            … migrations をまとめた写し（SQL Editor 用）
+│  └─ tests/                … RLS の検証
 └─ docs/
 ```
+
+機能ごとのフォルダは、その機能の画面だけを持つ。
+画面をまたいで使うものだけを `components/` と `lib/` に置く。
 
 ## 6. 主要ライブラリ（想定）
 

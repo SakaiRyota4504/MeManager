@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { HOME } from "@/lib/nav/features";
 
 export type FormState = { error: string } | null;
 
@@ -51,7 +52,7 @@ export async function signIn(
   if (error) return { error: toJapaneseMessage(error.message) };
 
   revalidatePath("/", "layout");
-  redirect("/calendar");
+  redirect(HOME);
 }
 
 export async function signOut() {
