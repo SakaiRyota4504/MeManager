@@ -539,7 +539,7 @@
       <p>
 家計簿や献立は画面が1つでは足りません。<strong>機能の中の行き先は、その下の細いタブ</strong>に並べます。上下2段にすることで、いま何の機能のどこにいるかが常に見えます。
       </p>
-      <p>スケジュールは今のところ「カレンダー」だけなので、1段で足ります。</p>
+      <p><strong>スケジュールはカレンダー1枚。</strong>取り込みは年に13回しか使わないので、毎日見る画面の上には置かず、設定の中に入れます。</p>
     </div>
     <div class="note">
       <h3>作っていない機能の扱い</h3>
@@ -561,11 +561,11 @@
           <tr><th>機能</th><th>URL</th><th>中の画面</th></tr>
         </thead>
         <tbody>
-          <tr><td>スケジュール</td><td><code>/schedule</code></td><td>カレンダー、取り込み履歴</td></tr>
+          <tr><td>スケジュール</td><td><code>/schedule</code></td><td>カレンダー</td></tr>
           <tr><td>習慣</td><td><code>/habits</code></td><td>今日、記録</td></tr>
           <tr><td>家計簿</td><td><code>/budget</code></td><td>入力、一覧、集計、予算</td></tr>
           <tr><td>献立</td><td><code>/meals</code></td><td>献立、レシピ、買い物</td></tr>
-          <tr><td>設定</td><td><code>/settings</code></td><td>メンバー、家族、表示</td></tr>
+          <tr><td>設定</td><td><code>/settings</code></td><td>メンバー、取り込み、表示</td></tr>
         </tbody>
       </table>
     </div>
@@ -587,11 +587,11 @@
   };
 
   const FEATURES = [
-    { id: "schedule", label: "スケジュール", ready: true, subs: ["カレンダー", "取り込み履歴"] },
+    { id: "schedule", label: "スケジュール", ready: true, subs: ["カレンダー"] },
     { id: "habits", label: "習慣", ready: false, subs: ["今日", "記録"] },
     { id: "budget", label: "家計簿", ready: false, subs: ["入力", "一覧", "集計", "予算"] },
     { id: "meals", label: "献立", ready: false, subs: ["献立", "レシピ", "買い物"] },
-    { id: "settings", label: "設定", ready: true, subs: ["メンバー", "家族", "表示"] },
+    { id: "settings", label: "設定", ready: true, subs: ["メンバー", "取り込み", "表示"] },
   ];
 
   const state = { feature: "schedule", sub: 0 };
@@ -643,10 +643,8 @@
         <button class="btn" type="button">‹</button>
         <button class="btn" type="button">›</button>
         <h2>2026年9月</h2>
+        <button class="btn primary" type="button" aria-label="予定を追加">＋</button>
         <button class="btn spacer" type="button">一覧</button>
-      </div>
-      <div class="pad" style="padding-top:0">
-        <button class="btn primary" type="button">＋ 予定を追加</button>
       </div>
       <div class="weekhead"><div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div></div>
       <div class="grid">

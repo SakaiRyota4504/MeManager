@@ -44,7 +44,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
       {/* 左右の余白は画面ごとに決める。
           カレンダーは端まで使い、それ以外は読みやすい幅で中央に寄せる。 */}
-      <div className="w-full flex-1">{children}</div>
+      <div className="flex w-full flex-1 flex-col">{children}</div>
 
       <BottomBarSpacer />
       <BottomBar />

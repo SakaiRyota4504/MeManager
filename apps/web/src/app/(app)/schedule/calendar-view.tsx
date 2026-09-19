@@ -79,7 +79,7 @@ export function CalendarView({
   };
 
   return (
-    <div className="space-y-3 py-3">
+    <div className="flex flex-1 flex-col gap-3 py-3">
       <div className="flex flex-wrap items-center gap-2 px-3">
         <button
           type="button"
@@ -107,6 +107,16 @@ export function CalendarView({
         >
           今日
         </button>
+        {/* 予定はマスを押して追加する。この＋は一覧表示のときの入口 */}
+        <button
+          type="button"
+          onClick={() => setEditing({ mode: "create", date: today })}
+          aria-label="予定を追加"
+          title="予定を追加"
+          className="cal-nav-btn grid size-8 place-items-center rounded-md bg-accent text-lg leading-none text-accent-fg"
+        >
+          ＋
+        </button>
 
         <div className="cal-seg ml-auto inline-flex overflow-hidden rounded-md border border-border-strong">
           {(["month", "list"] as const).map((v) => (
@@ -125,18 +135,8 @@ export function CalendarView({
         </div>
       </div>
 
-      <div className="px-3">
-        <button
-          type="button"
-          onClick={() => setEditing({ mode: "create", date: today })}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-fg"
-        >
-          ＋ 予定を追加
-        </button>
-      </div>
-
       {view === "month" ? (
-        <div>
+        <div className="flex min-h-0 flex-1 flex-col">
           <div className="cal-weekhead">
             {weekdayLabels.map((w) => (
               <div key={w}>{w}</div>

@@ -12,6 +12,8 @@ export type FeatureId = "schedule" | "habits" | "budget" | "meals" | "settings";
 export type FeatureScreen = {
   label: string;
   href: string;
+  /** 作り終わっているか。省略は true */
+  ready?: boolean;
 };
 
 export type Feature = {
@@ -34,6 +36,9 @@ export const FEATURES: Feature[] = [
     label: "スケジュール",
     href: "/schedule",
     ready: true,
+    // カレンダー1枚だけにする。2段目のタブが出ると、
+    // 毎日見る画面の上に「年に13回しか押さないもの」が並んでしまう。
+    // 取り込みとその履歴は設定の中に置く（docs/06-app-shell.md 4節）。
     screens: [{ label: "カレンダー", href: "/schedule" }],
   },
   {
@@ -74,12 +79,18 @@ export const FEATURES: Feature[] = [
     label: "設定",
     href: "/settings",
     ready: true,
-    screens: [{ label: "メンバー", href: "/settings/members" }],
+    screens: [
+      { label: "メンバー", href: "/settings/members" },
+      { label: "取り込み", href: "/settings/import", ready: false },
+    ],
   },
 ];
 
-/** メニューに出す機能 */
-export const MENU: Feature[] = FEATURES.filter((f) => f.ready);
+/** メニューに出す機能。画面も、作り終わっているものだけにする */
+export const MENU: Feature[] = FEATURES.filter((f) => f.ready).map((f) => ({
+  ...f,
+  screens: f.screens.filter((s) => s.ready !== false),
+}));
 
 /** 最初に開く画面 */
 export const HOME = "/schedule";

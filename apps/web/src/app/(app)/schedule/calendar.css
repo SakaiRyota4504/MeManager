@@ -22,11 +22,18 @@
 
 /* カレンダーは画面の端まで使う。左右に余白を置くとマスが狭くなり、
    予定のタイトルが読めなくなるため（要件定義 9.5）。
-   端に接するので、左右の枠と角の丸めは付けない。 */
+   端に接するので、左右の枠と角の丸めは付けない。
+
+   縦は**残っている高さを全部使う**。マスの高さを決め打ちにすると、
+   画面が広いときに下が余り、狭いときに溢れる。
+   行は 1fr で分け合い、足りなくなったら --cal-row で止めて縦に伸ばす。 */
 .cal-grid {
   /* minmax(0, 1fr) にしないと、予定の文字幅ぶん列が広がって横スクロールになる */
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--cal-row, 108px), 1fr);
+  flex: 1;
+  min-height: 0;
   gap: 1px;
   background: var(--color-border);
   border-top: 1px solid var(--color-border);
@@ -36,7 +43,6 @@
 
 .cal-cell {
   background: var(--color-background);
-  min-height: 108px;
   padding: 3px 3px 5px;
   display: flex;
   flex-direction: column;
@@ -144,8 +150,10 @@
   .cal-chip .cal-chip-time {
     display: none;
   }
+  .cal-grid {
+    --cal-row: 82px;
+  }
   .cal-cell {
-    min-height: 82px;
     padding: 2px 2px 4px;
   }
   .cal-chip {
@@ -164,9 +172,11 @@
 /* 7列の月表示では、この幅がタイトルを読める限界。
    1行だと5文字前後で切れるので、2行に折り返して倍の文字数を出す。 */
 @media (max-width: 520px) {
+  .cal-grid {
+    --cal-row: 94px;
+  }
   .cal-cell {
     padding: 2px 1px 4px;
-    min-height: 94px;
   }
   .cal-chip {
     --chip-size: 9.5px;
