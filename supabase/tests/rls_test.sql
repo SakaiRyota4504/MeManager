@@ -658,6 +658,65 @@ end
 $$;
 
 reset role;
+
+\echo '--- 11. 画面の設定は本人だけのもの ---'
+
+-- 父が絞り込みを保存する
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+select public.save_preference('schedule.members',
+  jsonb_build_array((select v from t_ctx where k = 'haha_member')));
+reset role;
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+select pg_temp.expect(
+  (select prefs -> 'schedule.members' ->> 0 from public.user_preferences)
+    = (select v from t_ctx where k = 'haha_member'),
+  '保存した設定を読み戻せる'
+);
+
+-- 別のキーを保存しても、前のキーは残る
+select public.save_preference('schedule.week_start', '1'::jsonb);
+select pg_temp.expect(
+  (select prefs ? 'schedule.members' and prefs ? 'schedule.week_start'
+   from public.user_preferences),
+  '別のキーを保存しても、前の設定は消えない'
+);
+
+-- 名前が変なキーは弾く（jsonb のキーが自由だと、あとで読めなくなる）
+do $$
+begin
+  begin
+    perform public.save_preference('../../etc', '1'::jsonb);
+    raise exception 'FAILED: 変な名前の設定が保存できた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   設定の名前は決めた形式だけ受け付ける';
+  end;
+end
+$$;
+reset role;
+
+-- 母からは、父の設定は見えない
+select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
+select pg_temp.expect(
+  (select count(*) from public.user_preferences) = 0,
+  '他の人の画面の設定は見えない（同じ家族でも）'
+);
+
+-- 母が保存しても、父の行は増えも減りもしない
+select public.save_preference('schedule.members', '[]'::jsonb);
+select pg_temp.expect(
+  (select count(*) from public.user_preferences) = 1,
+  '自分の設定は自分の行にだけ入る'
+);
+reset role;
+
+select pg_temp.expect(
+  (select count(*) from public.user_preferences) = 2,
+  '2人ぶんの行がある（RLS を外して見れば）'
+);
+
 rollback;
 
 \echo ''

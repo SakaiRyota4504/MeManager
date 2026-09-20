@@ -60,7 +60,7 @@ Supabase（データの置き場）と Vercel（アプリの置き場）を、
 4. 貼り付けて **Run**（`Ctrl/Cmd + Enter` でも可）
 
 **Success. No rows returned** と出れば完了。
-左の **Table Editor** に5つのテーブルが見える。
+左の **Table Editor** に6つのテーブルが見える。
 
 | テーブル | 中身 |
 | --- | --- |
@@ -69,6 +69,7 @@ Supabase（データの置き場）と Vercel（アプリの置き場）を、
 | `calendars` | カレンダー |
 | `events` | 予定 |
 | `event_assignees` | 予定の担当者 |
+| `user_preferences` | 画面の設定（絞り込みなど） |
 
 > 全体が `begin;` 〜 `commit;` で囲んであるので、
 > 途中で失敗しても中途半端なテーブルは残らない。貼り直せばよい。

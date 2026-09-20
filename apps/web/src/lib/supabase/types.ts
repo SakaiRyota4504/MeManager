@@ -61,6 +61,13 @@ export type EventAssignee = {
   member_id: string;
 };
 
+export type UserPreferences = {
+  member_id: string;
+  family_id: string;
+  /** 画面の状態。キーは "schedule.members" のように機能名で始める */
+  prefs: Record<string, unknown>;
+} & Timestamps;
+
 export type Calendar = {
   id: string;
   family_id: string;
@@ -115,6 +122,13 @@ export type Database = {
           },
         ];
       };
+      user_preferences: {
+        Row: UserPreferences;
+        Insert: Partial<UserPreferences> &
+          Pick<UserPreferences, "member_id" | "family_id">;
+        Update: Partial<UserPreferences>;
+        Relationships: [];
+      };
       calendars: {
         Row: Calendar;
         Insert: Partial<Calendar> & Pick<Calendar, "family_id" | "name">;
@@ -147,6 +161,10 @@ export type Database = {
           target_member_id?: string | null;
         };
         Returns: string;
+      };
+      save_preference: {
+        Args: { key: string; value: unknown };
+        Returns: void;
       };
       is_bootstrap: {
         Args: Record<string, never>;

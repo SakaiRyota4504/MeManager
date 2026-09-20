@@ -201,15 +201,32 @@
   }
 }
 
+/* 絞り込みの小窓は、ボタンのある側に開く。
+   広い画面ではボタンが右端、狭い画面では2行目の左端に来るため。 */
+.cal-filter-menu {
+  right: 0;
+  max-width: calc(100vw - 24px);
+}
+@media (max-width: 860px) {
+  .cal-filter-menu {
+    right: auto;
+    left: 0;
+  }
+}
+
 /* 指で押せる大きさ（44px）を確保する */
 @media (max-width: 900px) {
   .cal-nav-btn {
     width: 44px;
     height: 44px;
   }
-  .cal-seg {
+  /* 絞り込みと月／一覧は、狭い画面では2行目にまとめて回す */
+  .cal-tools {
     width: 100%;
     order: 3;
+  }
+  .cal-seg {
+    flex: 1;
   }
   .cal-seg button {
     flex: 1;

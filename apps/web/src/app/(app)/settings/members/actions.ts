@@ -245,3 +245,32 @@ export async function renameFamily(
   revalidatePath("/", "layout");
   return { ok: true };
 }
+
+/** 週の開始曜日を変える。管理者だけ（RLS で決まる） */
+export async function setWeekStart(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const familyId = String(formData.get("family_id") ?? "");
+  const weekStart = Number(formData.get("week_start"));
+
+  if (!familyId) return { error: "家族が特定できません" };
+  if (!Number.isInteger(weekStart) || weekStart < 0 || weekStart > 6) {
+    return { error: "曜日の指定が正しくありません" };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("families")
+    .update({ week_start: weekStart })
+    .eq("id", familyId)
+    .select("id");
+
+  if (error) return { error: toJapaneseMessage(error.message) };
+  if (!data || data.length === 0) {
+    return { error: "この設定を変える権限がありません" };
+  }
+
+  revalidatePath("/schedule");
+  return { ok: true };
+}

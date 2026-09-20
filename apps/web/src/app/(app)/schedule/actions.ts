@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { toIso } from "@/lib/calendar/date";
+import { SCHEDULE_FILTER_KEY } from "@/lib/calendar/filter";
 
 export type EventFormState = { error: string } | { ok: true } | null;
 
@@ -116,4 +117,18 @@ export async function deleteEvent(
 
   revalidatePath("/schedule");
   return { ok: true };
+}
+
+/**
+ * 絞り込みの状態を覚えておく。
+ *
+ * ブラウザではなくDBに置くので、別の端末で開いても同じになる。
+ * 保存に失敗しても画面は動いたままでよい（次に開いたとき全員に戻るだけ）。
+ */
+export async function saveScheduleFilter(value: string): Promise<void> {
+  const supabase = await createClient();
+  await supabase.rpc("save_preference", {
+    key: SCHEDULE_FILTER_KEY,
+    value,
+  });
 }

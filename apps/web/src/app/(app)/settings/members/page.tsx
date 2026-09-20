@@ -2,6 +2,7 @@ import { requireSession } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { AddMemberPanel } from "./add-member-panel";
 import { FamilyName } from "./family-name";
+import { WeekStart } from "./week-start";
 import { MemberRow } from "./member-row";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,12 @@ export default async function MembersPage() {
           />
           <p className="text-sm text-muted">{active.length} 人のメンバー</p>
         </div>
+
+        <WeekStart
+          familyId={session.family.id}
+          value={session.family.week_start ?? 0}
+          canManage={isAdmin}
+        />
 
         <ul className="divide-y divide-border rounded-lg border border-border">
           {active.map((member) => (

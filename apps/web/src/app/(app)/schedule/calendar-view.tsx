@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Calendar, Member } from "@/lib/supabase/types";
 import type { EventWithAssignees } from "@/lib/calendar/model";
@@ -16,8 +16,16 @@ import {
   toMonthKey,
   todayKey,
 } from "@/lib/calendar/date";
+import {
+  filterEvents,
+  isSelfOnly,
+  serializeSelected,
+  type Selected,
+} from "@/lib/calendar/filter";
 import { EventPanel } from "./event-panel";
 import { EventDetail } from "./event-detail";
+import { FilterMenu } from "./filter-menu";
+import { saveScheduleFilter } from "./actions";
 import "./calendar.css";
 
 type View = "month" | "list";
@@ -29,6 +37,7 @@ export function CalendarView({
   calendars,
   events,
   selfMemberId,
+  selected: initialSelected,
 }: {
   month: string;
   weekStart: number;
@@ -36,6 +45,7 @@ export function CalendarView({
   calendars: Calendar[];
   events: EventWithAssignees[];
   selfMemberId: string;
+  selected: Selected;
 }) {
   const router = useRouter();
   const today = todayKey();
@@ -51,16 +61,58 @@ export function CalendarView({
   >(null);
   const [detail, setDetail] = useState<EventWithAssignees | null>(null);
 
-  const byDate = useMemo(() => groupByDate(events), [events]);
+  // 絞り込みは取り直さず、手元にある予定を減らして見せる（NFR-P02）。
+  const [selected, setSelected] = useState<Selected>(initialSelected);
+
+  const changeFilter = useCallback((next: Selected) => {
+    setSelected(next);
+    const value = serializeSelected(next);
+
+    // URL にも残す。再読み込みしても戻らず、家族にリンクを送れる。
+    // router を使うと取り直しになるので、履歴だけ書き換える。
+    const url = new URL(window.location.href);
+    url.searchParams.set("m", value);
+    window.history.replaceState(null, "", url);
+
+    // 次に開いたときのために覚えておく。
+    // 保存できなくても画面はそのままでよい（次に開いたとき戻るだけ）ので、
+    // 待たずに投げ、失敗も握りつぶす。
+    void saveScheduleFilter(value).catch(() => {});
+  }, []);
+
+  const openPanel = editing !== null || detail !== null;
+
+  // 「自分の予定のみ」の出し入れ（FR-M06）。入力中とパネル表示中は邪魔しない。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "m" && e.key !== "M") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (openPanel) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("input, textarea, select, [contenteditable]")) return;
+      changeFilter(isSelfOnly(selected, selfMemberId) ? null : [selfMemberId]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [changeFilter, openPanel, selected, selfMemberId]);
+
+  const shown = useMemo(
+    () => filterEvents(events, selected),
+    [events, selected],
+  );
+  const byDate = useMemo(() => groupByDate(shown), [shown]);
   const days = useMemo(
     () => monthGridDays(month, weekStart),
     [month, weekStart],
   );
   const defaultCalendar = calendars.find((c) => c.is_default) ?? calendars[0];
 
-  const go = (delta: number) => {
-    router.push(`/schedule?month=${shiftMonth(month, delta)}`);
+  const goMonth = (next: string) => {
+    const query = new URLSearchParams({ month: next });
+    if (selected !== null) query.set("m", serializeSelected(selected));
+    router.push(`/schedule?${query}`);
   };
+  const go = (delta: number) => goMonth(shiftMonth(month, delta));
 
   const weekdayLabels = Array.from(
     { length: 7 },
@@ -100,9 +152,7 @@ export function CalendarView({
         <h1 className="text-lg font-bold tabular-nums">{formatMonth(month)}</h1>
         <button
           type="button"
-          onClick={() =>
-            router.push(`/schedule?month=${toMonthKey(new Date())}`)
-          }
+          onClick={() => goMonth(toMonthKey(new Date()))}
           className="rounded-md border border-border-strong px-3 py-1 text-sm"
         >
           今日
@@ -118,20 +168,28 @@ export function CalendarView({
           ＋
         </button>
 
-        <div className="cal-seg ml-auto inline-flex overflow-hidden rounded-md border border-border-strong">
-          {(["month", "list"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={view === v}
-              onClick={() => setView(v)}
-              className={`px-4 py-1.5 text-sm ${
-                view === v ? "bg-accent text-accent-fg" : ""
-              }`}
-            >
-              {v === "month" ? "月" : "一覧"}
-            </button>
-          ))}
+        <div className="cal-tools ml-auto flex items-center gap-2">
+          <FilterMenu
+            members={members}
+            selected={selected}
+            selfMemberId={selfMemberId}
+            onChange={changeFilter}
+          />
+          <div className="cal-seg inline-flex overflow-hidden rounded-md border border-border-strong">
+            {(["month", "list"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => setView(v)}
+                className={`px-4 py-1.5 text-sm ${
+                  view === v ? "bg-accent text-accent-fg" : ""
+                }`}
+              >
+                {v === "month" ? "月" : "一覧"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -209,6 +267,7 @@ export function CalendarView({
           byDate={byDate}
           members={members}
           today={today}
+          filtered={selected !== null}
           chipFor={chipFor}
           onSelect={setDetail}
         />
@@ -249,6 +308,7 @@ function EventList({
   byDate,
   members,
   today,
+  filtered,
   chipFor,
   onSelect,
 }: {
@@ -256,6 +316,7 @@ function EventList({
   byDate: Map<string, EventWithAssignees[]>;
   members: Member[];
   today: string;
+  filtered: boolean;
   chipFor: (e: EventWithAssignees) => { color: string; time: string | null };
   onSelect: (e: EventWithAssignees) => void;
 }) {
@@ -264,7 +325,9 @@ function EventList({
   if (keys.length === 0) {
     return (
       <p className="px-3 py-12 text-center text-sm text-muted">
-        この月の予定はまだありません。
+        {filtered
+          ? "絞り込みに当てはまる予定はありません。"
+          : "この月の予定はまだありません。"}
       </p>
     );
   }
