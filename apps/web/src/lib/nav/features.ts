@@ -55,12 +55,13 @@ export const FEATURES: Feature[] = [
     id: "budget",
     label: "家計簿",
     href: "/budget",
-    ready: false,
+    ready: true,
+    // 入力が機能の入口（/budget）。レジを出た直後に開く画面が
+    // 集計の下に隠れないようにする（docs/07-budget-requirements.md 6章）。
     screens: [
-      { label: "入力", href: "/budget/new" },
-      { label: "一覧", href: "/budget" },
-      { label: "集計", href: "/budget/summary" },
-      { label: "予算", href: "/budget/plan" },
+      { label: "入力", href: "/budget" },
+      { label: "一覧", href: "/budget/list" },
+      { label: "集計", href: "/budget/summary", ready: false },
     ],
   },
   {
@@ -81,6 +82,7 @@ export const FEATURES: Feature[] = [
     ready: true,
     screens: [
       { label: "メンバー", href: "/settings/members" },
+      { label: "費目", href: "/settings/categories" },
       { label: "取り込み", href: "/settings/import" },
     ],
   },
@@ -107,7 +109,7 @@ export function screenOf(
   feature: Feature,
   pathname: string,
 ): FeatureScreen | undefined {
-  // 長く一致するものを優先する（/budget より /budget/new）
+  // 長く一致するものを優先する（/budget より /budget/list）
   return [...feature.screens]
     .sort((a, b) => b.href.length - a.href.length)
     .find((s) => pathname === s.href || pathname.startsWith(`${s.href}/`));

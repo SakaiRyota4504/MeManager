@@ -1051,6 +1051,245 @@ select pg_temp.expect(
 );
 reset role;
 
+-- ===========================================================================
+\echo '--- 15. 家計簿（費目・記録・予算） ---'
+
+-- 家族ができたときに費目が用意される（FR-B10）
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+select pg_temp.expect(
+  (select count(*) from public.budget_categories where kind = 'expense') >= 10
+  and (select count(*) from public.budget_categories where kind = 'income') >= 3,
+  '家族ができると、最初から使える費目が入っている'
+);
+
+select pg_temp.expect(
+  not exists (
+    select 1 from public.budget_categories
+    where lower(color) in ('#dc2626', '#ca8a04')
+  ),
+  '注意・超過の色は費目に使われていない'
+);
+
+insert into t_ctx
+select 'cat_food', (select id::text from public.budget_categories
+                    where name = '食費' and kind = 'expense');
+insert into t_ctx
+select 'cat_pay', (select id::text from public.budget_categories
+                   where name = '給与' and kind = 'income');
+
+-- 記録を入れる。金額と費目だけで通る（FR-B03 / AC-B02）
+insert into t_ctx
+select 'tx1', public.create_transaction(jsonb_build_object(
+  'amount', 4280,
+  'category_id', (select v from t_ctx where k = 'cat_food')))::text;
+
+select pg_temp.expect(
+  (select amount from public.transactions
+   where id = (select v from t_ctx where k = 'tx1')::uuid) = 4280,
+  '金額と費目だけで記録できる'
+);
+select pg_temp.expect(
+  (select occurred_on from public.transactions
+   where id = (select v from t_ctx where k = 'tx1')::uuid)
+    = (now() at time zone 'Asia/Tokyo')::date,
+  '日付を渡さなければ、日本時間の今日になる（FR-B04）'
+);
+select pg_temp.expect(
+  (select kind from public.transactions
+   where id = (select v from t_ctx where k = 'tx1')::uuid) = 'expense',
+  '向きは費目が決める。支出の費目なら支出'
+);
+
+-- 収入の費目を選べば収入になる（FR-B02）
+select public.create_transaction(jsonb_build_object(
+  'amount', 420000,
+  'occurred_on', (now() at time zone 'Asia/Tokyo')::date,
+  'category_id', (select v from t_ctx where k = 'cat_pay')));
+
+select pg_temp.expect(
+  (select count(*) from public.transactions
+   where kind = 'income' and amount = 420000) = 1,
+  '収入の費目を選ぶと収入として入る'
+);
+
+-- 金額は正の整数だけ（3.3 / 5章）
+do $$
+begin
+  begin
+    perform public.create_transaction(jsonb_build_object(
+      'amount', -100,
+      'category_id', (select v from t_ctx where k = 'cat_food')));
+    raise exception 'FAILED: マイナスの金額が入ってしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   マイナスの金額は入らない（向きは kind で表す）';
+  end;
+end
+$$;
+
+-- 予算を決めて、残りを見る（FR-B30 / FR-B31）
+select public.set_budget(
+  (select v from t_ctx where k = 'cat_food')::uuid, null, 70000);
+
+select pg_temp.expect(
+  (select budget from public.budget_status(null)
+   where category_id = (select v from t_ctx where k = 'cat_food')::uuid) = 70000
+  and (select used from public.budget_status(null)
+       where category_id = (select v from t_ctx where k = 'cat_food')::uuid) = 4280,
+  '費目ごとの予算と、その月に使った額が引ける'
+);
+
+-- 0円にすると「決めていない」に戻る。予算0と未設定を区別するため
+select public.set_budget(
+  (select v from t_ctx where k = 'cat_food')::uuid, null, 0);
+select pg_temp.expect(
+  (select budget from public.budget_status(null)
+   where category_id = (select v from t_ctx where k = 'cat_food')::uuid) is null,
+  '予算を0にすると、決めていない状態に戻る'
+);
+select public.set_budget(
+  (select v from t_ctx where k = 'cat_food')::uuid, null, 70000);
+
+-- 先月の記録は今月の残りに混ざらない（3.5）
+select public.create_transaction(jsonb_build_object(
+  'amount', 9999,
+  'occurred_on', (date_trunc('month', (now() at time zone 'Asia/Tokyo')::date)
+                  - interval '1 day')::date,
+  'category_id', (select v from t_ctx where k = 'cat_food')));
+
+select pg_temp.expect(
+  (select used from public.budget_status(null)
+   where category_id = (select v from t_ctx where k = 'cat_food')::uuid) = 4280,
+  '先月の記録は今月の「使った額」に入らない'
+);
+
+-- 消したら残りに入らない。30日は戻せる（FR-B05）
+select public.delete_transaction((select v from t_ctx where k = 'tx1')::uuid);
+select pg_temp.expect(
+  (select used from public.budget_status(null)
+   where category_id = (select v from t_ctx where k = 'cat_food')::uuid) = 0,
+  '消した記録は、使った額から外れる'
+);
+select public.restore_transaction((select v from t_ctx where k = 'tx1')::uuid);
+select pg_temp.expect(
+  (select used from public.budget_status(null)
+   where category_id = (select v from t_ctx where k = 'cat_food')::uuid) = 4280,
+  '戻すと、また使った額に入る'
+);
+
+-- テーブルに直接は書けない。書き込みは関数を通す
+do $$
+begin
+  begin
+    insert into public.transactions
+      (family_id, occurred_on, amount, kind, category_id)
+    values ((select v from t_ctx where k = 'family_a')::uuid,
+            current_date, 100, 'expense',
+            (select v from t_ctx where k = 'cat_food')::uuid);
+    raise exception 'FAILED: テーブルに直接書き込めてしまった';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok   記録はテーブルに直接書き込めない';
+  end;
+end
+$$;
+
+-- 費目は隠せるが消えない（FR-B13）
+select public.update_budget_category(
+  (select v from t_ctx where k = 'cat_food')::uuid,
+  '{"is_active": false}'::jsonb);
+select pg_temp.expect(
+  (select not is_active from public.budget_categories
+   where id = (select v from t_ctx where k = 'cat_food')::uuid)
+  and (select count(*) from public.transactions
+       where category_id = (select v from t_ctx where k = 'cat_food')::uuid
+         and deleted_at is null) = 2,
+  '隠した費目でも、それまでの記録は残る'
+);
+select public.update_budget_category(
+  (select v from t_ctx where k = 'cat_food')::uuid,
+  '{"is_active": true}'::jsonb);
+
+-- 同じ名前の費目は作れない
+do $$
+begin
+  begin
+    perform public.create_budget_category('{"name": "食費"}'::jsonb);
+    raise exception 'FAILED: 同じ名前の費目が作れてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   同じ名前の費目は作れない';
+  end;
+end
+$$;
+reset role;
+
+-- 家族の中では共有される。別の家族からは見えない（3.4 / AC-B06）
+select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
+select pg_temp.expect(
+  (select count(*) from public.transactions where amount = 4280) = 1,
+  '同じ家族の他のメンバーからも記録が見える'
+);
+reset role;
+
+select pg_temp.login_as('22222222-2222-2222-2222-222222222222');
+select pg_temp.expect(
+  (select count(*) from public.transactions) = 0
+  and (select count(*) from public.budgets) = 0,
+  '別の家族からは、記録も予算も見えない'
+);
+select pg_temp.expect(
+  (select count(*) from public.budget_status(null)
+   where category_id = (select v from t_ctx where k = 'cat_food')::uuid) = 0,
+  '別の家族の費目は budget_status にも出てこない'
+);
+
+-- 別の家族の費目には記録も予算も付けられない
+do $$
+begin
+  begin
+    perform public.create_transaction(jsonb_build_object(
+      'amount', 100,
+      'category_id', (select v from t_ctx where k = 'cat_food')));
+    raise exception 'FAILED: 別の家族の費目に記録できてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   別の家族の費目には記録できない';
+  end;
+end
+$$;
+
+do $$
+begin
+  begin
+    perform public.set_budget(
+      (select v from t_ctx where k = 'cat_food')::uuid, null, 50000);
+    raise exception 'FAILED: 別の家族の予算を決められてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   別の家族の費目には予算を決められない';
+  end;
+end
+$$;
+
+do $$
+begin
+  begin
+    perform public.delete_transaction((select v from t_ctx where k = 'tx1')::uuid);
+    raise exception 'FAILED: 別の家族の記録を消せてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   別の家族の記録は消せない';
+  end;
+end
+$$;
+reset role;
+
 rollback;
 
 \echo ''

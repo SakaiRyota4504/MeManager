@@ -115,6 +115,63 @@ export type Calendar = {
   is_default: boolean;
 } & Timestamps;
 
+/** 家計簿の費目。支出用と収入用がある（docs/07-budget-requirements.md 4.2） */
+export type CategoryKind = "expense" | "income";
+
+export type BudgetCategory = {
+  id: string;
+  family_id: string;
+  name: string;
+  kind: CategoryKind;
+  color: string;
+  /** 小さいほど先に出る */
+  sort_order: number;
+  /** 使わなくなった費目は false。過去の記録は残る */
+  is_active: boolean;
+} & Timestamps;
+
+/** 家計簿の記録1件 */
+export type Transaction = {
+  id: string;
+  family_id: string;
+  occurred_on: string;
+  /** 円。支出も収入も正の数で、向きは kind で表す */
+  amount: number;
+  kind: CategoryKind;
+  category_id: string;
+  /** 使った人。抜けた人の記録は null になる */
+  member_id: string | null;
+  note: string | null;
+  created_by: string | null;
+  deleted_at: string | null;
+} & Timestamps;
+
+/** 費目ごとの月の予算。category_id が null なら全体の予算 */
+export type Budget = {
+  id: string;
+  family_id: string;
+  /** その月の1日 */
+  month: string;
+  category_id: string | null;
+  amount: number;
+} & Timestamps;
+
+/** budget_status() が返す1行。費目・予算・使った額をまとめたもの */
+export type CategoryStatus = {
+  category_id: string;
+  name: string;
+  kind: CategoryKind;
+  color: string;
+  sort_order: number;
+  is_active: boolean;
+  /** 予算を決めていなければ null */
+  budget: number | null;
+  /** その月に使った額 */
+  used: number;
+  /** 直近90日の件数。よく使う順に並べるために使う */
+  uses: number;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -199,6 +256,42 @@ export type Database = {
         Update: Partial<Calendar>;
         Relationships: [];
       };
+      budget_categories: {
+        Row: BudgetCategory;
+        Insert: Partial<BudgetCategory> &
+          Pick<BudgetCategory, "family_id" | "name">;
+        Update: Partial<BudgetCategory>;
+        Relationships: [];
+      };
+      transactions: {
+        Row: Transaction;
+        Insert: Partial<Transaction>;
+        Update: Partial<Transaction>;
+        // 一覧で費目を一緒に引くため、外部キーを書いておく
+        Relationships: [
+          {
+            foreignKeyName: "transactions_category_id_fkey";
+            columns: ["category_id"];
+            isOneToOne: false;
+            referencedRelation: "budget_categories";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transactions_member_id_fkey";
+            columns: ["member_id"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      budgets: {
+        Row: Budget;
+        Insert: Partial<Budget> &
+          Pick<Budget, "family_id" | "month" | "amount">;
+        Update: Partial<Budget>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -250,6 +343,48 @@ export type Database = {
       restore_import_batch: {
         Args: { target_batch_id: string };
         Returns: number;
+      };
+      budget_status: {
+        Args: { target_month?: string | null };
+        Returns: CategoryStatus[];
+      };
+      create_transaction: {
+        Args: { payload: Record<string, unknown> };
+        Returns: string;
+      };
+      update_transaction: {
+        Args: {
+          target_transaction_id: string;
+          payload: Record<string, unknown>;
+        };
+        Returns: void;
+      };
+      delete_transaction: {
+        Args: { target_transaction_id: string };
+        Returns: void;
+      };
+      restore_transaction: {
+        Args: { target_transaction_id: string };
+        Returns: void;
+      };
+      create_budget_category: {
+        Args: { payload: Record<string, unknown> };
+        Returns: string;
+      };
+      update_budget_category: {
+        Args: {
+          target_category_id: string;
+          payload: Record<string, unknown>;
+        };
+        Returns: void;
+      };
+      set_budget: {
+        Args: {
+          target_category_id: string | null;
+          target_month: string | null;
+          new_amount: number | null;
+        };
+        Returns: void;
       };
       save_preference: {
         Args: { key: string; value: unknown };

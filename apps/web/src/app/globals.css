@@ -12,6 +12,11 @@
   --today: #eff6ff;
   --sat: #2563eb;
   --sun: #dc2626;
+  /* 状態の色（家計簿の予算など）。費目の色とは別に取ってあり、使い回さない。
+     docs/07-budget-requirements.md 4.4 */
+  --warn: #ca8a04;
+  --over: #dc2626;
+  --ok: #16a34a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,6 +32,9 @@
     --today: #16233a;
     --sat: #60a5fa;
     --sun: #f87171;
+    --warn: #facc15;
+    --over: #f87171;
+    --ok: #4ade80;
   }
 }
 
@@ -42,6 +50,9 @@
   --color-today: var(--today);
   --color-sat: var(--sat);
   --color-sun: var(--sun);
+  --color-warn: var(--warn);
+  --color-over: var(--over);
+  --color-ok: var(--ok);
   --font-sans:
     system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP",
     Meiryo, sans-serif;
