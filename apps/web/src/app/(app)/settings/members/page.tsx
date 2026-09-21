@@ -1,5 +1,6 @@
 import { requireSession } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import { AddMemberPanel } from "./add-member-panel";
 import { FamilyName } from "./family-name";
 import { WeekStart } from "./week-start";
@@ -11,6 +12,9 @@ export default async function MembersPage() {
   const session = await requireSession();
   const supabase = await createClient();
   const isAdmin = session.member.role === "admin";
+  // この鍵が無いと、アプリの中からアカウントを作れない。
+  // 入力させてから失敗させるより、先に道を変えて見せる。
+  const canCreateAccount = hasServiceRoleKey();
 
   // RLS により、自分の家族のメンバーだけが返る。
   // family_id での絞り込みを書かなくても他の家族は見えない。
@@ -47,6 +51,7 @@ export default async function MembersPage() {
               member={member}
               isSelf={member.id === session.member.id}
               canManage={isAdmin}
+              canCreateAccount={canCreateAccount}
               familyId={session.family.id}
             />
           ))}
@@ -59,7 +64,12 @@ export default async function MembersPage() {
         )}
       </section>
 
-      {isAdmin && <AddMemberPanel familyId={session.family.id} />}
+      {isAdmin && (
+        <AddMemberPanel
+          familyId={session.family.id}
+          canCreateAccount={canCreateAccount}
+        />
+      )}
 
       {inactive.length > 0 && (
         <section className="space-y-3">
@@ -76,6 +86,7 @@ export default async function MembersPage() {
                 member={member}
                 isSelf={false}
                 canManage={isAdmin}
+                canCreateAccount={canCreateAccount}
                 familyId={session.family.id}
               />
             ))}

@@ -5,7 +5,14 @@ import { useActionState, useState } from "react";
 import { addMember, type ActionState } from "./actions";
 import { Field, FormError, SubmitButton } from "@/components/form";
 
-export function AddMemberPanel({ familyId }: { familyId: string }) {
+export function AddMemberPanel({
+  familyId,
+  canCreateAccount,
+}: {
+  familyId: string;
+  /** サーバーの鍵があるか。無いとアプリの中からアカウントを作れない */
+  canCreateAccount: boolean;
+}) {
   const [state, formAction] = useActionState<ActionState, FormData>(
     addMember,
     null,
@@ -50,8 +57,9 @@ export function AddMemberPanel({ familyId }: { familyId: string }) {
         {withLogin && (
           <div className="space-y-4 rounded-md border border-dashed border-border p-4">
             <p className="text-xs text-muted">
-              決めたメールアドレスとパスワードを本人に伝えてください。
-              本人があとから変更できます。
+              {canCreateAccount
+                ? "決めたメールアドレスとパスワードを本人に伝えてください。本人があとから変更できます。"
+                : "メールアドレスだけ登録します。"}
             </p>
             <Field
               label="メールアドレス"
@@ -60,22 +68,39 @@ export function AddMemberPanel({ familyId }: { familyId: string }) {
               required
               autoComplete="off"
             />
-            <Field
-              label="パスワード"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              hint="8文字以上。空のままにすると、ここではアカウントを作りません"
-            />
-            <p className="text-xs text-muted">
-              パスワードを空にした場合は、上のメールアドレスを
-              <strong className="font-medium text-foreground">
-                この人の枠として登録するだけ
-              </strong>
-              です。Supabase の Authentication
-              で同じアドレスのユーザーを作ると、
-              その時点でこの人としてログインできるようになります。
-            </p>
+
+            {canCreateAccount ? (
+              <>
+                <Field
+                  label="パスワード"
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  hint="8文字以上。空のままにすると、ここではアカウントを作りません"
+                />
+                <p className="text-xs text-muted">
+                  パスワードを空にした場合は、上のメールアドレスをこの人の枠として登録するだけです。
+                  Supabase の Authentication で同じアドレスのユーザーを作ると、
+                  その時点でこの人としてログインできるようになります。
+                </p>
+              </>
+            ) : (
+              /* 鍵が無いときは、入力させてから失敗させない。
+                 Supabase 側で作る道（docs/05-setup.md 3-2 B）だけを見せる。 */
+              <div className="space-y-1.5 rounded-md border border-border bg-surface-2 p-3 text-xs text-muted">
+                <p className="font-medium text-foreground">
+                  パスワードはここでは決められません
+                </p>
+                <p>
+                  サーバーの設定（<code>SUPABASE_SERVICE_ROLE_KEY</code>
+                  ）が入っていないためです。
+                  このまま追加すると「メールアドレスの枠」だけが登録されるので、
+                  続けて Supabase の Authentication → Add user で
+                  同じアドレスのユーザーを作ってください。
+                  その時点でこの人としてログインできます。
+                </p>
+              </div>
+            )}
           </div>
         )}
 

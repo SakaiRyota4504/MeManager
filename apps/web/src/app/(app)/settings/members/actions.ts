@@ -117,7 +117,11 @@ async function attachAccount(
 ): Promise<ActionState> {
   if (!hasServiceRoleKey()) {
     return {
-      error: "サーバーの設定が足りません（SUPABASE_SERVICE_ROLE_KEY が未設定）",
+      error:
+        "ここでパスワードを決めるには、サーバーの設定（SUPABASE_SERVICE_ROLE_KEY）が要ります。" +
+        "Vercel の Settings → Environment Variables に入れて Redeploy してください。" +
+        "入れずに進めるなら、パスワードを空にして追加し、" +
+        "Supabase の Authentication で同じメールアドレスのユーザーを作ってください。",
     };
   }
 

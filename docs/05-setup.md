@@ -319,8 +319,24 @@ Root Directory が `apps/web` になっているか確認する（2-2）。
 Authentication → Users でその人の行を開き、確認済みにするか、作り直す。
 
 **「SUPABASE_SERVICE_ROLE_KEY が未設定」と出る**
-3つ目の鍵を入れ忘れている。メンバー画面からアカウントを作るのに必要
-（3-2 A）。Supabase 側で作る場合（3-2 B）は無くても動く。
+3つ目の鍵が Vercel に入っていない。直し方は2通り。
+
+**A. 鍵を入れる**（メンバー画面でパスワードまで決めたい場合）
+
+1. Supabase の **Project Settings** → **API Keys** → **Secret key** を **Reveal** してコピー
+2. Vercel の **Settings** → **Environment Variables** で
+   `SUPABASE_SERVICE_ROLE_KEY` として追加する
+   - 名前は1文字も違わないこと。`NEXT_PUBLIC_` は**付けない**
+   - **Production** にチェックが入っていること
+3. **Deployments** → 最新の **⋯** → **Redeploy**
+
+> **3を飛ばさない。** 環境変数を足しただけでは、すでに動いているものには反映されない。
+
+**B. 鍵を入れない**（Supabase 側でアカウントを作る場合）
+
+鍵が無いときは、メンバー画面のパスワード欄が最初から出ない。
+メールアドレスだけ入れて追加し、Supabase の **Authentication** →
+**Add user** で同じアドレスのユーザーを作る（3-2 B）。こちらは鍵が要らない。
 
 **テーブルが見当たらない**
 1-2 の SQL を流し忘れている。次の確認用の SQL を実行すると、

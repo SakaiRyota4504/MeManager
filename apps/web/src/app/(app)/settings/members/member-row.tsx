@@ -23,11 +23,14 @@ export function MemberRow({
   member,
   isSelf,
   canManage,
+  canCreateAccount,
   familyId,
 }: {
   member: Member;
   isSelf: boolean;
   canManage: boolean;
+  /** サーバーの鍵があるか。無いとアプリの中からアカウントを作れない */
+  canCreateAccount: boolean;
   familyId: string;
 }) {
   const [state, formAction] = useActionState<ActionState, FormData>(
@@ -58,7 +61,10 @@ export function MemberRow({
   }
 
   const canEnableLogin =
-    canManage && member.is_active && member.user_id === null;
+    canManage &&
+    canCreateAccount &&
+    member.is_active &&
+    member.user_id === null;
   const canRename = canManage || isSelf;
   // メールアドレスだけ登録してある人。Supabase 側でユーザーを作れば使えるようになる。
   const waitingForAccount = member.user_id === null && member.login_email;
@@ -108,6 +114,15 @@ export function MemberRow({
             ログインを設定
           </button>
         )}
+        {canManage &&
+          !canCreateAccount &&
+          member.is_active &&
+          member.user_id === null &&
+          !member.login_email && (
+            <span title="サーバーの鍵（SUPABASE_SERVICE_ROLE_KEY）が未設定のため、ここではアカウントを作れません">
+              ログインは Supabase で
+            </span>
+          )}
 
         {canManage && !isSelf && (
           <form action={formAction}>
