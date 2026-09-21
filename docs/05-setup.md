@@ -65,7 +65,7 @@ Supabase（データの置き場）と Vercel（アプリの置き場）を、
 > **途中で切れたものが貼られる**。Raw なら1枚のテキストなので切れない。
 
 **Success. No rows returned** と出れば完了。
-左の **Table Editor** に6つのテーブルが見える。
+左の **Table Editor** に8つのテーブルが見える。
 
 | テーブル | 中身 |
 | --- | --- |
@@ -75,6 +75,8 @@ Supabase（データの置き場）と Vercel（アプリの置き場）を、
 | `events` | 予定 |
 | `event_assignees` | 予定の担当者 |
 | `user_preferences` | 画面の設定（絞り込みなど） |
+| `event_exceptions` | 繰り返し予定の休む回 |
+| `import_batches` | 取り込み1回ぶん |
 
 > 全体が `begin;` 〜 `commit;` で囲んであるので、
 > 途中で失敗しても中途半端なテーブルは残らない。貼り直せばよい。

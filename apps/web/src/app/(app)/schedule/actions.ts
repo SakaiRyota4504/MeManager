@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { toIso } from "@/lib/calendar/date";
-import { SCHEDULE_FILTER_KEY } from "@/lib/calendar/filter";
+import { HIDE_CANCELLED_KEY, SCHEDULE_FILTER_KEY } from "@/lib/calendar/filter";
 
 export type EventFormState = { error: string } | { ok: true } | null;
 
@@ -154,6 +154,15 @@ export async function saveScheduleFilter(value: string): Promise<void> {
   const supabase = await createClient();
   await supabase.rpc("save_preference", {
     key: SCHEDULE_FILTER_KEY,
+    value,
+  });
+}
+
+/** 中止した予定を隠すかどうかを覚えておく */
+export async function saveHideCancelled(value: boolean): Promise<void> {
+  const supabase = await createClient();
+  await supabase.rpc("save_preference", {
+    key: HIDE_CANCELLED_KEY,
     value,
   });
 }

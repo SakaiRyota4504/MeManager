@@ -18,6 +18,7 @@ export const ALL = "all";
 
 /** user_preferences に入れるときの名前 */
 export const SCHEDULE_FILTER_KEY = "schedule.members";
+export const HIDE_CANCELLED_KEY = "schedule.hide_cancelled";
 
 /**
  * URL や保存済みの文字列を読む。
@@ -50,14 +51,23 @@ export function isFiltered(selected: Selected): boolean {
   return selected !== null;
 }
 
-/** 選んだ人が担当している予定だけを残す */
+/**
+ * 見せる予定を絞る。
+ *
+ * 中止した予定は、既定では出したままにする。取り消し線で残っているほうが
+ * 「無くなった」と分かるため。数が増えて邪魔なときだけ隠せるようにする。
+ */
 export function filterEvents(
   events: EventWithAssignees[],
   selected: Selected,
+  hideCancelled = false,
 ): EventWithAssignees[] {
-  if (selected === null) return events;
+  const shown = hideCancelled
+    ? events.filter((e) => e.status !== "cancelled")
+    : events;
+  if (selected === null) return shown;
   const set = new Set(selected);
-  return events.filter((e) => e.assignees.some((id) => set.has(id)));
+  return shown.filter((e) => e.assignees.some((id) => set.has(id)));
 }
 
 /** 押すたびに1人を出し入れする。全員を外したら「全員」に戻す */

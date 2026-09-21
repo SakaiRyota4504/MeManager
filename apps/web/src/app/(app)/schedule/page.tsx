@@ -4,7 +4,11 @@ import { requireSession } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { fetchEvents } from "@/lib/calendar/events";
 import { isView, rangeFor, todayKey } from "@/lib/calendar/date";
-import { parseSelected, SCHEDULE_FILTER_KEY } from "@/lib/calendar/filter";
+import {
+  HIDE_CANCELLED_KEY,
+  parseSelected,
+  SCHEDULE_FILTER_KEY,
+} from "@/lib/calendar/filter";
 import { CalendarView } from "./calendar-view";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +64,12 @@ export default async function SchedulePage(props: PageProps<"/schedule">) {
   );
   const selected = fromUrl !== undefined ? fromUrl : (fromSaved ?? null);
 
+  // 中止した予定を隠すか。URL に指定があればそちらを優先する
+  const hideCancelled =
+    typeof params.c === "string"
+      ? params.c === "0"
+      : saved?.prefs?.[HIDE_CANCELLED_KEY] === true;
+
   return (
     <CalendarView
       view={view}
@@ -70,6 +80,7 @@ export default async function SchedulePage(props: PageProps<"/schedule">) {
       events={events}
       selfMemberId={session.member.id}
       selected={selected}
+      hideCancelled={hideCancelled}
     />
   );
 }

@@ -854,6 +854,127 @@ select pg_temp.expect(
 );
 reset role;
 
+\echo '--- 13. 取り込みと一括削除 ---'
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+
+insert into t_ctx
+select 'batch', (public.commit_import(jsonb_build_object(
+  'calendar_id', (select v from t_ctx where k = 'cal'),
+  'name', '9月の休日',
+  'file_name', 'holidays.csv',
+  'rows', jsonb_build_array(
+    jsonb_build_object('title', '休み', 'all_day', true,
+      'start_date', '2026-10-03', 'end_date', '2026-10-03',
+      'external_key', 'h:1',
+      'assignees', jsonb_build_array((select v from t_ctx where k = 'child'))),
+    jsonb_build_object('title', '休み', 'all_day', true,
+      'start_date', '2026-10-04', 'end_date', '2026-10-04',
+      'external_key', 'h:2',
+      'assignees', jsonb_build_array((select v from t_ctx where k = 'child'))),
+    jsonb_build_object('title', '午前のみ', 'all_day', false,
+      'starts_at', '2026-10-09T00:00:00Z', 'ends_at', '2026-10-09T03:00:00Z',
+      'external_key', 'h:3',
+      'assignees', jsonb_build_array((select v from t_ctx where k = 'child')))
+  )
+)) ->> 'batch_id');
+
+select pg_temp.expect(
+  (select event_count from public.import_batches
+   where id = (select v from t_ctx where k = 'batch')::uuid) = 3,
+  '3件がまとめて入り、件数が記録される'
+);
+select pg_temp.expect(
+  (select count(*) from public.events
+   where import_batch_id = (select v from t_ctx where k = 'batch')::uuid) = 3,
+  '入った予定に、どの取り込みかが残る'
+);
+select pg_temp.expect(
+  (select count(*) from public.event_assignees ea
+   join public.events e on e.id = ea.event_id
+   where e.import_batch_id = (select v from t_ctx where k = 'batch')::uuid) = 3,
+  '担当者も一緒に入る'
+);
+
+-- 担当者のいない行は、1行でも混ざっていたら全部入らない
+do $$
+begin
+  begin
+    perform public.commit_import(jsonb_build_object(
+      'calendar_id', (select v from t_ctx where k = 'cal'),
+      'name', 'だめな取り込み',
+      'rows', jsonb_build_array(
+        jsonb_build_object('title', 'よい行', 'all_day', true,
+          'start_date', '2026-11-01', 'end_date', '2026-11-01',
+          'assignees', jsonb_build_array((select v from t_ctx where k = 'child'))),
+        jsonb_build_object('title', '担当者なし', 'all_day', true,
+          'start_date', '2026-11-02', 'end_date', '2026-11-02',
+          'assignees', '[]'::jsonb))));
+    raise exception 'FAILED: 担当者のない行が入ってしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   担当者のない行が混ざると、1件も入らない';
+  end;
+end
+$$;
+select pg_temp.expect(
+  (select count(*) from public.events where title = 'よい行') = 0,
+  '途中まで入った状態は残らない'
+);
+
+-- 先に1件だけ手で消しておく。まとめて戻したときに巻き添えで復活しないこと
+-- （同じ取引の中なので、時刻の一致では見分けられない。印で見分けている）
+select public.delete_event(
+  (select id from public.events
+   where import_batch_id = (select v from t_ctx where k = 'batch')::uuid
+     and external_key = 'h:2'));
+
+-- 塊で消す
+select pg_temp.expect(
+  public.delete_import_batch((select v from t_ctx where k = 'batch')::uuid) = 2,
+  'まとめて消すと、残っていた2件が消える'
+);
+select pg_temp.expect(
+  (select count(*) from public.events
+   where import_batch_id = (select v from t_ctx where k = 'batch')::uuid) = 0,
+  'その回に入った予定は見えなくなる'
+);
+
+-- 塊で戻す
+select pg_temp.expect(
+  public.restore_import_batch((select v from t_ctx where k = 'batch')::uuid) = 2,
+  '戻すと、まとめて消した2件だけが戻る'
+);
+select pg_temp.expect(
+  (select count(*) from public.events
+   where import_batch_id = (select v from t_ctx where k = 'batch')::uuid
+     and external_key = 'h:2') = 0,
+  '先に1件ずつ消していた予定は、巻き添えで戻らない'
+);
+reset role;
+
+-- 別の家族からは、取り込み履歴も見えない
+select pg_temp.login_as('22222222-2222-2222-2222-222222222222');
+select pg_temp.expect(
+  (select count(*) from public.import_batches) = 0,
+  '別の家族からは取り込み履歴が見えない'
+);
+do $$
+begin
+  begin
+    perform public.delete_import_batch(
+      (select v from t_ctx where k = 'batch')::uuid);
+    raise exception 'FAILED: 別の家族の取り込みを消せてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   別の家族の取り込みは消せない';
+  end;
+end
+$$;
+reset role;
+
 rollback;
 
 \echo ''

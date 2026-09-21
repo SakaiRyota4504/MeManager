@@ -139,13 +139,14 @@
 
 **完了の目安**: 受け入れ基準 AC-09 を満たす。
 
-### Step 6: CSV 取込と一括削除
+### Step 6: CSV 取込と一括削除（実装済み）
 
 対応する要件: FR-I01、FR-I04、FR-I10〜I16、FR-I20〜I29、FR-I30〜I32、FR-I50〜I54、FR-E12
 詳細仕様: [04-csv-format.md](04-csv-format.md)
 
-1. `events` への状態（確定／仮／中止）と `external_key` の追加
-   — `external_key` の一意制約は `deleted_at IS NULL` の部分インデックスにする
+1. `events` への `external_key` と `import_batch_id` の追加
+   — **`external_key` は一意制約にしない。** 重複だと分かったうえで
+   そのまま入れる選択（FR-I21）ができなくなるため。検索用の索引だけ張る
 2. 標準CSV形式の解析とプレビュー（`/api/import/parse`）
 3. 担当者・カレンダーの一括指定と、取り込みの実行（`/api/import/commit`）
 4. `external_key` による重複検出
@@ -160,6 +161,9 @@
 
 この段階では手書きのCSVで確認すればよい。
 football-data.org からのCSV生成は別プログラムの作業になる。
+
+**.ics と文字コードの自動判定（FR-I01・FR-I04）は Step 7 に回した。**
+まず使うのは自分で作る CSV（UTF-8）なので、先に一周させることを優先した。
 
 ### Step 7: 取り込みの繰り返しを楽にする（月1回の取り込み）
 

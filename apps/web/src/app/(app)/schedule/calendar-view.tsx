@@ -29,7 +29,7 @@ import { EventPanel } from "./event-panel";
 import { EventDetail } from "./event-detail";
 import { FilterMenu } from "./filter-menu";
 import { WeekView } from "./week-view";
-import { saveScheduleFilter } from "./actions";
+import { saveHideCancelled, saveScheduleFilter } from "./actions";
 import "./calendar.css";
 
 export function CalendarView({
@@ -41,6 +41,7 @@ export function CalendarView({
   events,
   selfMemberId,
   selected: initialSelected,
+  hideCancelled: initialHideCancelled,
 }: {
   view: View;
   date: string;
@@ -50,6 +51,7 @@ export function CalendarView({
   events: EventWithAssignees[];
   selfMemberId: string;
   selected: Selected;
+  hideCancelled: boolean;
 }) {
   const router = useRouter();
   const today = todayKey();
@@ -64,6 +66,15 @@ export function CalendarView({
 
   // 絞り込みは取り直さず、手元にある予定を減らして見せる（NFR-P02）。
   const [selected, setSelected] = useState<Selected>(initialSelected);
+  const [hideCancelled, setHideCancelled] = useState(initialHideCancelled);
+
+  const changeHideCancelled = useCallback((next: boolean) => {
+    setHideCancelled(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("c", next ? "0" : "1");
+    window.history.replaceState(null, "", url);
+    void saveHideCancelled(next).catch(() => {});
+  }, []);
 
   const changeFilter = useCallback((next: Selected) => {
     setSelected(next);
@@ -156,8 +167,8 @@ export function CalendarView({
   ]);
 
   const shown = useMemo(
-    () => filterEvents(events, selected),
-    [events, selected],
+    () => filterEvents(events, selected, hideCancelled),
+    [events, selected, hideCancelled],
   );
   const byDate = useMemo(() => groupByDate(shown), [shown]);
   const days = useMemo(
@@ -238,6 +249,8 @@ export function CalendarView({
             selected={selected}
             selfMemberId={selfMemberId}
             onChange={changeFilter}
+            hideCancelled={hideCancelled}
+            onHideCancelled={changeHideCancelled}
           />
           <div className="cal-seg inline-flex overflow-hidden rounded-md border border-border-strong">
             {VIEWS.map((v) => (

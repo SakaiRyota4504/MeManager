@@ -81,7 +81,7 @@ export const FEATURES: Feature[] = [
     ready: true,
     screens: [
       { label: "メンバー", href: "/settings/members" },
-      { label: "取り込み", href: "/settings/import", ready: false },
+      { label: "取り込み", href: "/settings/import" },
     ],
   },
 ];

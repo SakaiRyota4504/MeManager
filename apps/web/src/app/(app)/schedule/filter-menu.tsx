@@ -24,11 +24,15 @@ export function FilterMenu({
   selected,
   selfMemberId,
   onChange,
+  hideCancelled,
+  onHideCancelled,
 }: {
   members: Member[];
   selected: Selected;
   selfMemberId: string;
   onChange: (next: Selected) => void;
+  hideCancelled: boolean;
+  onHideCancelled: (next: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -114,6 +118,18 @@ export function FilterMenu({
               <span className="ml-1 text-xs text-muted">（M）</span>
             </button>
           </div>
+
+          <div className="my-1.5 border-t border-border" />
+
+          <label className="flex items-center gap-2 px-2 py-1.5 text-sm">
+            <input
+              type="checkbox"
+              checked={hideCancelled}
+              onChange={(e) => onHideCancelled(e.target.checked)}
+              className="size-4 accent-accent"
+            />
+            中止した予定を隠す
+          </label>
 
           <div className="my-1.5 border-t border-border" />
 

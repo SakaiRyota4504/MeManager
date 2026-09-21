@@ -54,6 +54,12 @@ export type CalendarEvent = {
   status: EventStatus;
   /** 繰り返しルール（RFC 5545 の RRULE）。null なら1回きり */
   rrule: string | null;
+  /** 取り込み元での識別子。重複の検出にだけ使う */
+  external_key: string | null;
+  /** どの取り込みで入ったか。null なら手で作った予定 */
+  import_batch_id: string | null;
+  /** まとめて消されたか。戻すときの目印 */
+  deleted_with_batch: boolean;
   created_by: string | null;
   deleted_at: string | null;
 } & Timestamps;
@@ -61,6 +67,19 @@ export type CalendarEvent = {
 export type EventAssignee = {
   event_id: string;
   member_id: string;
+};
+
+/** 取り込み1回ぶん */
+export type ImportBatch = {
+  id: string;
+  family_id: string;
+  name: string;
+  file_name: string | null;
+  source: string;
+  event_count: number;
+  created_by: string | null;
+  created_at: string;
+  deleted_at: string | null;
 };
 
 /** 繰り返し予定のうち、出さない回 */
@@ -138,6 +157,12 @@ export type Database = {
         Update: Partial<UserPreferences>;
         Relationships: [];
       };
+      import_batches: {
+        Row: ImportBatch;
+        Insert: Partial<ImportBatch> & Pick<ImportBatch, "family_id" | "name">;
+        Update: Partial<ImportBatch>;
+        Relationships: [];
+      };
       event_exceptions: {
         Row: EventException;
         Insert: Pick<EventException, "event_id" | "occurrence_date">;
@@ -193,6 +218,18 @@ export type Database = {
           target_member_id?: string | null;
         };
         Returns: string;
+      };
+      commit_import: {
+        Args: { payload: Record<string, unknown> };
+        Returns: { batch_id: string; count: number };
+      };
+      delete_import_batch: {
+        Args: { target_batch_id: string };
+        Returns: number;
+      };
+      restore_import_batch: {
+        Args: { target_batch_id: string };
+        Returns: number;
       };
       save_preference: {
         Args: { key: string; value: unknown };
