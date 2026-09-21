@@ -159,14 +159,18 @@ FR-B35: 繰り越しを入れると「今月の予算」が毎月変わり、そ
 | FR-B44 | 月をまたいだ推移（12か月）を見られる | Should |
 | FR-B45 | 記録を検索・絞り込みできる（費目・人・メモ）。期間は月の行き来で足りる | Should |
 
-### 4.6 レシート
+### 4.6 レシート — **作らない**
 
 | ID | 要件 | 優先度 |
 | --- | --- | --- |
-| FR-B50 | 記録にレシートの写真を1枚添付できる | Should |
-| FR-B51 | 写真は家族だけが見られる（Supabase Storage + RLS） | Must |
-| FR-B52 | 記録を削除したら写真も消える | Must |
+| FR-B50 | レシートの写真は**持たない** | — |
 | FR-B53 | 写真から金額を自動で読み取る（OCR）は**作らない** | — |
+
+当初は「記録に写真を1枚添付できる」を Should に置いていたが、**やめた。**
+
+写真を持つと、置き場（Storage）とその認可、記録を消したときの後始末、
+容量の管理が付いてくる。それに見合うのは「買ったものを後から確かめたい」
+だけで、そこはメモ欄で足りる。
 
 FR-B53: 日本のレシートの読み取り精度では、結局すべて確かめることになる。
 確かめる手間と入力する手間が変わらない。
@@ -190,7 +194,7 @@ families ──┬── budget_categories   費目（支出・収入）
 | テーブル | 主な列 |
 | --- | --- |
 | `budget_categories` | `family_id` `name` `kind(expense/income)` `color` `sort_order` `is_active` |
-| `transactions` | `family_id` `occurred_on(date)` `amount(integer)` `kind` `category_id` `member_id(使った人)` `note` `receipt_path` `recurring_id` `created_by` `deleted_at` |
+| `transactions` | `family_id` `occurred_on(date)` `amount(integer)` `kind` `category_id` `member_id(使った人)` `note` `recurring_id` `created_by` `deleted_at` |
 | `budgets` | `family_id` `month(YYYY-MM-01)` `category_id(null=全体)` `amount` |
 | `recurring_expenses` | `family_id` `name` `amount(null可)` `category_id` `member_id` `rrule` `is_active` |
 
@@ -245,7 +249,7 @@ families ──┬── budget_categories   費目（支出・収入）
 | 1 | 費目・記録（入力と一覧）・予算の残り表示 | 中 | **済** |
 | 2 | 集計と予算 | 中 | **済** |
 | 3 | 固定費 | 小 | **済** |
-| 4 | レシートの写真 | 小 | |
+| 4 | ~~レシートの写真~~ | — | **作らない** |
 | 5 | CSV の取り込み | 小（スケジュールの仕組みを流用） | |
 
 1が終わった時点で**毎日使える**状態になる。そこから先は使いながら足す。
