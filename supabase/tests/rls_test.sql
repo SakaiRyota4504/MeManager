@@ -1290,6 +1290,69 @@ end
 $$;
 reset role;
 
+-- ===========================================================================
+\echo '--- 16. メンバーの色 ---'
+
+-- Supabase の Table Editor からの追加を模す（RLS を通らない直接の insert）。
+-- 色の列を省いても、既定値の青ではなく空いている色が入ること。
+insert into public.members (family_id, display_name)
+values ((select v from t_ctx where k = 'family_a')::uuid, 'いろは');
+
+select pg_temp.expect(
+  (select color from public.members where display_name = 'いろは') <> '#2563eb',
+  '色を入れずに足しても、管理者と同じ色にはならない'
+);
+
+-- 空欄（空文字）でもよい
+insert into public.members (family_id, display_name, color)
+values ((select v from t_ctx where k = 'family_a')::uuid, 'にほへ', '');
+
+select pg_temp.expect(
+  (select color from public.members where display_name = 'にほへ')
+    ~ '^#[0-9a-f]{6}$',
+  '色を空欄にして足しても、ちゃんとした色が入る'
+);
+
+select pg_temp.expect(
+  (select count(distinct color) from public.members
+   where family_id = (select v from t_ctx where k = 'family_a')::uuid)
+  = (select count(*) from public.members
+     where family_id = (select v from t_ctx where k = 'family_a')::uuid),
+  '同じ家族の中で、色が重なっていない'
+);
+
+select pg_temp.expect(
+  not exists (
+    select 1 from public.members
+    where lower(color) in ('#dc2626', '#ca8a04')
+  ),
+  '注意・超過の色は、人の色としても割り当てられない'
+);
+
+-- 本人が自分の色を変えられる
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+update public.members set color = '#c026d3'
+where user_id = '11111111-1111-1111-1111-111111111111';
+
+select pg_temp.expect(
+  (select color from public.members
+   where user_id = '11111111-1111-1111-1111-111111111111') = '#c026d3',
+  '自分の色は自分で変えられる'
+);
+reset role;
+
+-- 管理者でない人は、他人の色を変えられない
+select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
+update public.members set color = '#16a34a'
+where user_id = '11111111-1111-1111-1111-111111111111';
+
+select pg_temp.expect(
+  (select color from public.members
+   where user_id = '11111111-1111-1111-1111-111111111111') = '#c026d3',
+  '管理者でない人は、他人の色を変えられない'
+);
+reset role;
+
 rollback;
 
 \echo ''

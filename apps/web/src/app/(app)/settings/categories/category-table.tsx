@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import type { CategoryKind, CategoryStatus } from "@/lib/supabase/types";
+import { PALETTE } from "@/lib/colors";
 import { swappedOrder } from "@/lib/budget/categories";
 import { formatAmountInput, formatYen, level } from "@/lib/budget/money";
 import {
@@ -11,25 +12,6 @@ import {
   type BudgetFormState,
 } from "../../budget/actions";
 import { Dot, LevelPill } from "../../budget/parts";
-
-/** 費目に選べる色。注意・超過の色（黄・赤）は入れない（4.4） */
-const COLORS = [
-  "#2563eb",
-  "#0284c7",
-  "#0891b2",
-  "#0f766e",
-  "#16a34a",
-  "#65a30d",
-  "#ea580c",
-  "#db2777",
-  "#c026d3",
-  "#7c3aed",
-  "#4f46e5",
-  "#475569",
-  "#57534e",
-  "#78716c",
-  "#71717a",
-];
 
 export function CategoryTable({
   kind,
@@ -186,7 +168,7 @@ function EditRow({
       <div className="flex flex-wrap items-center gap-2 text-[13px]">
         <span className="w-16 shrink-0 text-muted">色</span>
         <span className="flex flex-wrap gap-1.5">
-          {COLORS.map((c) => (
+          {PALETTE.map((c) => (
             <button
               key={c}
               type="button"

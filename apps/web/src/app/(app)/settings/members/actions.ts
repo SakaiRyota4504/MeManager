@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient, hasServiceRoleKey } from "@/lib/supabase/admin";
+import { isColor } from "@/lib/colors";
 
 export type ActionState =
   { error: string } | { ok: true; message?: string } | null;
@@ -216,6 +217,36 @@ export async function renameMember(
   if (error) return { error: toJapaneseMessage(error.message) };
   if (!data || data.length === 0) {
     return { error: "この人の表示名を変える権限がありません" };
+  }
+
+  revalidatePath("/settings/members");
+  revalidatePath("/schedule");
+  return { ok: true };
+}
+
+/**
+ * 色を変える。
+ *
+ * 予定の色は「最初の担当者の色」で決まるので、ここはカレンダーの見え方を
+ * 決める設定でもある。本人と管理者が変えられる（範囲は RLS とトリガーが決める）。
+ */
+export async function setMemberColor(
+  memberId: string,
+  color: string,
+): Promise<ActionState> {
+  if (!memberId) return { error: "メンバーが特定できません" };
+  if (!isColor(color)) return { error: "色の指定が正しくありません" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("members")
+    .update({ color })
+    .eq("id", memberId)
+    .select("id");
+
+  if (error) return { error: toJapaneseMessage(error.message) };
+  if (!data || data.length === 0) {
+    return { error: "この人の色を変える権限がありません" };
   }
 
   revalidatePath("/settings/members");

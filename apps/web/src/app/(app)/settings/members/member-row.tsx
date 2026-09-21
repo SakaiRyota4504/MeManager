@@ -4,11 +4,13 @@ import { useActionState, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 
 import type { Member } from "@/lib/supabase/types";
+import { HUES } from "@/lib/colors";
 import {
   deactivateMember,
   enableLogin,
   reactivateMember,
   renameMember,
+  setMemberColor,
   type ActionState,
 } from "./actions";
 import { Field, FormError, SubmitButton } from "@/components/form";
@@ -44,6 +46,8 @@ export function MemberRow({
   const [opening, setOpening] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameError, setRenameError] = useState<string | undefined>(undefined);
+  const [pickingColor, setPickingColor] = useState(false);
+  const [colorError, setColorError] = useState<string | undefined>(undefined);
   const [, startTransition] = useTransition();
 
   // 成功したら畳む。useActionState ではなくここで結果を受けるのは、
@@ -60,23 +64,47 @@ export function MemberRow({
     });
   }
 
+  function chooseColor(color: string) {
+    startTransition(async () => {
+      const result = await setMemberColor(member.id, color);
+      if (result && "error" in result) {
+        setColorError(result.error);
+      } else {
+        setColorError(undefined);
+        setPickingColor(false);
+      }
+    });
+  }
+
+  const canRename = canManage || isSelf;
   const canEnableLogin =
     canManage &&
     canCreateAccount &&
     member.is_active &&
     member.user_id === null;
-  const canRename = canManage || isSelf;
   // メールアドレスだけ登録してある人。Supabase 側でユーザーを作れば使えるようになる。
   const waitingForAccount = member.user_id === null && member.login_email;
 
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
       <span className="flex items-center gap-2.5">
-        <span
-          aria-hidden
-          className="inline-block size-3 shrink-0 rounded-full"
-          style={{ backgroundColor: member.color }}
-        />
+        {/* 予定の色は最初の担当者の色で決まるので、ここはカレンダーの設定でもある */}
+        {canRename ? (
+          <button
+            type="button"
+            onClick={() => setPickingColor((v) => !v)}
+            aria-expanded={pickingColor}
+            aria-label={`${member.display_name} の色を変える`}
+            className="inline-block size-4 shrink-0 rounded-full ring-offset-2 ring-offset-background hover:ring-2 hover:ring-border-strong"
+            style={{ backgroundColor: member.color }}
+          />
+        ) : (
+          <span
+            aria-hidden
+            className="inline-block size-3 shrink-0 rounded-full"
+            style={{ backgroundColor: member.color }}
+          />
+        )}
         <span
           className={`text-sm font-medium ${member.is_active ? "" : "text-muted"}`}
         >
@@ -85,7 +113,9 @@ export function MemberRow({
         {isSelf && <span className="text-xs text-muted">（自分）</span>}
       </span>
 
-      <span className="flex items-center gap-3 text-xs text-muted">
+      {/* 幅が狭いときは項目ごとに折り返す。
+          nowrap が無いと「名前を変 / える」のように語の途中で割れる */}
+      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs whitespace-nowrap text-muted">
         {waitingForAccount ? (
           <span title="Supabase の Authentication で、このアドレスのユーザーを作るとログインできます">
             {member.login_email} を待っています
@@ -136,6 +166,33 @@ export function MemberRow({
         <p role="alert" className="w-full text-xs text-red-600">
           {state.error}
         </p>
+      )}
+
+      {pickingColor && (
+        <div className="w-full space-y-2 rounded-md border border-dashed border-border p-3">
+          {/* 日本語は改行がそのまま空白になるので、1つの文字列にまとめて渡す */}
+          <p className="text-xs text-muted">
+            {`${member.display_name}の色。カレンダーで、この人が担当の予定に付きます。`}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {HUES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-label={`色 ${c}`}
+                aria-pressed={member.color.toLowerCase() === c}
+                onClick={() => chooseColor(c)}
+                style={{ backgroundColor: c }}
+                className={`size-7 rounded-full ${
+                  member.color.toLowerCase() === c
+                    ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                    : ""
+                }`}
+              />
+            ))}
+          </div>
+          <FormError message={colorError} />
+        </div>
       )}
 
       {renaming && (
