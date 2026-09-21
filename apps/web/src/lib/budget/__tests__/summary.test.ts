@@ -29,6 +29,7 @@ function tx(over: Partial<TransactionView>): TransactionView {
     category_id: "c1",
     member_id: "m1",
     note: null,
+    recurring_id: null,
     created_by: "m1",
     deleted_at: null,
     created_at: now,

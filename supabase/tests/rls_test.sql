@@ -1451,6 +1451,198 @@ select pg_temp.expect(
 );
 reset role;
 
+-- ===========================================================================
+\echo '--- 18. 固定費（B3） ---'
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+
+insert into t_ctx
+select 'rent', public.create_recurring_expense(jsonb_build_object(
+  'name', '家賃',
+  'amount', 90000,
+  'category_id', (select v from t_ctx where k = 'cat_food'),
+  'rrule', 'FREQ=MONTHLY;BYMONTHDAY=27',
+  'start_date', '2026-01-01'))::text;
+
+select pg_temp.expect(
+  (select amount from public.recurring_expenses
+   where id = (select v from t_ctx where k = 'rent')::uuid) = 90000,
+  '固定費を登録できる'
+);
+
+-- 金額の決まっていない固定費（FR-B23）
+insert into t_ctx
+select 'power', public.create_recurring_expense(jsonb_build_object(
+  'name', '電気代',
+  'category_id', (select v from t_ctx where k = 'cat_food'),
+  'rrule', 'FREQ=MONTHLY;BYMONTHDAY=10',
+  'start_date', '2026-01-01'))::text;
+
+select pg_temp.expect(
+  (select amount from public.recurring_expenses
+   where id = (select v from t_ctx where k = 'power')::uuid) is null,
+  '金額を決めずに登録できる（毎月変わるもの）'
+);
+
+-- 収入の費目は選べない
+do $$
+begin
+  begin
+    perform public.create_recurring_expense(jsonb_build_object(
+      'name', '給料', 'amount', 1000,
+      'category_id', (select v from t_ctx where k = 'cat_pay'),
+      'rrule', 'FREQ=MONTHLY;BYMONTHDAY=25'));
+    raise exception 'FAILED: 収入の費目で固定費が作れてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   固定費に収入の費目は選べない';
+  end;
+end
+$$;
+
+-- **登録しただけでは記録に入らない**（FR-B22）。これが固定費のいちばん大事なところ
+select pg_temp.expect(
+  (select count(*) from public.transactions
+   where recurring_id is not null) = 0,
+  '登録しただけでは、記録は1件も増えない'
+);
+
+-- 押したときに初めて記録になる
+select public.record_recurring(
+  (select v from t_ctx where k = 'rent')::uuid,
+  (date_trunc('month', (now() at time zone 'Asia/Tokyo')::date)
+   + interval '26 days')::date);
+
+select pg_temp.expect(
+  (select count(*) from public.transactions
+   where recurring_id = (select v from t_ctx where k = 'rent')::uuid
+     and amount = 90000 and kind = 'expense' and note = '家賃') = 1,
+  '押すと、登録してある額で記録になる'
+);
+
+-- 同じ月に二度は入らない（家族の2人が同時に押しても）
+do $$
+begin
+  begin
+    perform public.record_recurring(
+      (select v from t_ctx where k = 'rent')::uuid,
+      (date_trunc('month', (now() at time zone 'Asia/Tokyo')::date)
+       + interval '27 days')::date);
+    raise exception 'FAILED: 同じ月に二重で入ってしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   同じ月に二度は入らない（日がずれていても）';
+  end;
+end
+$$;
+
+-- 金額の決まっていないものは、額を渡さないと入らない
+do $$
+begin
+  begin
+    perform public.record_recurring(
+      (select v from t_ctx where k = 'power')::uuid,
+      (now() at time zone 'Asia/Tokyo')::date);
+    raise exception 'FAILED: 金額なしで記録できてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   金額の決まっていない固定費は、額を入れないと記録にならない';
+  end;
+end
+$$;
+
+select public.record_recurring(
+  (select v from t_ctx where k = 'power')::uuid,
+  (now() at time zone 'Asia/Tokyo')::date, 12640);
+select pg_temp.expect(
+  (select amount from public.transactions
+   where recurring_id = (select v from t_ctx where k = 'power')::uuid) = 12640,
+  'その場で入れた額で記録になる'
+);
+
+-- 記録になったものは、予算の「使った額」にも入る
+select pg_temp.expect(
+  (select used from public.budget_status(null)
+   where category_id = (select v from t_ctx where k = 'cat_food')::uuid)
+   = 4280 + 90000 + 12640,
+  '固定費の記録も、ふつうの記録と同じく予算に効く'
+);
+
+-- 消せば、また入れられる
+select public.delete_transaction((
+  select id from public.transactions
+  where recurring_id = (select v from t_ctx where k = 'rent')::uuid));
+select public.record_recurring(
+  (select v from t_ctx where k = 'rent')::uuid,
+  (date_trunc('month', (now() at time zone 'Asia/Tokyo')::date)
+   + interval '26 days')::date);
+select pg_temp.expect(
+  (select count(*) from public.transactions
+   where recurring_id = (select v from t_ctx where k = 'rent')::uuid
+     and deleted_at is null) = 1,
+  '間違えて消したら、入れ直せる'
+);
+
+-- やめた固定費は記録にできない
+select public.update_recurring_expense(
+  (select v from t_ctx where k = 'power')::uuid,
+  '{"is_active": false}'::jsonb);
+do $$
+begin
+  begin
+    perform public.record_recurring(
+      (select v from t_ctx where k = 'power')::uuid,
+      ((now() at time zone 'Asia/Tokyo')::date + 1));
+    raise exception 'FAILED: やめた固定費が記録にできてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   やめた固定費は記録にできない';
+  end;
+end
+$$;
+
+-- テーブルに直接は書けない
+do $$
+begin
+  begin
+    insert into public.recurring_expenses (family_id, name, category_id, rrule, start_date)
+    values ((select v from t_ctx where k = 'family_a')::uuid, '勝手に',
+            (select v from t_ctx where k = 'cat_food')::uuid,
+            'FREQ=MONTHLY;BYMONTHDAY=1', current_date);
+    raise exception 'FAILED: テーブルに直接書き込めてしまった';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok   固定費はテーブルに直接書き込めない';
+  end;
+end
+$$;
+reset role;
+
+-- 別の家族からは見えないし、触れない
+select pg_temp.login_as('22222222-2222-2222-2222-222222222222');
+select pg_temp.expect(
+  (select count(*) from public.recurring_expenses) = 0,
+  '別の家族の固定費は見えない'
+);
+do $$
+begin
+  begin
+    perform public.record_recurring(
+      (select v from t_ctx where k = 'rent')::uuid, current_date);
+    raise exception 'FAILED: 別の家族の固定費を記録にできてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   別の家族の固定費は記録にできない';
+  end;
+end
+$$;
+reset role;
+
 rollback;
 
 \echo ''

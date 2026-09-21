@@ -81,6 +81,7 @@ Supabase（データの置き場）と Vercel（アプリの置き場）を、
 | `budget_categories` | 家計簿の費目 |
 | `transactions` | 家計簿の記録 |
 | `budgets` | 費目ごとの月の予算 |
+| `recurring_expenses` | 固定費（家賃・サブスクなど） |
 
 > 全体が `begin;` 〜 `commit;` で囲んであるので、
 > 途中で失敗しても中途半端なテーブルは残らない。貼り直せばよい。

@@ -18,6 +18,11 @@ function toJapaneseMessage(message: string): string {
   if (/TRANSACTION_NOT_FOUND/.test(message)) return "その記録は見つかりません";
   if (/MEMBER_REQUIRED/.test(message)) return "メンバーが見つかりません";
   if (/TOO_OLD/.test(message)) return "削除から30日を過ぎた記録は戻せません";
+  if (/ALREADY_RECORDED/.test(message)) return "その月ぶんはもう入っています";
+  if (/AMOUNT_REQUIRED/.test(message)) return "金額を入れてください";
+  if (/RECURRING_NOT_FOUND/.test(message)) return "その固定費は見つかりません";
+  if (/INVALID_RECURRING/.test(message))
+    return "固定費の指定が正しくありません";
   return message;
 }
 
@@ -26,6 +31,7 @@ function refresh(): void {
   revalidatePath("/budget");
   revalidatePath("/budget/list");
   revalidatePath("/budget/summary");
+  revalidatePath("/settings/recurring");
 }
 
 // ---------------------------------------------------------------------------
@@ -217,4 +223,92 @@ export async function reorderCategories(
   }
   revalidatePath("/settings/categories");
   refresh();
+}
+
+// ---------------------------------------------------------------------------
+// 固定費（FR-B20〜FR-B23）
+// ---------------------------------------------------------------------------
+
+function recurringPayload(formData: FormData): Record<string, unknown> {
+  const amount = parseAmount(String(formData.get("amount") ?? ""));
+  const startDate = String(formData.get("start_date") ?? "");
+  return {
+    name: String(formData.get("name") ?? "").trim(),
+    // 空欄は「毎月変わる」の意味。0 ではなく null にする（FR-B23）
+    amount: amount > 0 ? amount : null,
+    category_id: String(formData.get("category_id") ?? ""),
+    member_id: String(formData.get("member_id") ?? ""),
+    rrule: String(formData.get("rrule") ?? ""),
+    ...(isDateKey(startDate) ? { start_date: startDate } : {}),
+  };
+}
+
+export async function createRecurring(
+  _prev: BudgetFormState,
+  formData: FormData,
+): Promise<BudgetFormState> {
+  const payload = recurringPayload(formData);
+  if (!payload.name) return { error: "名前を入れてください" };
+  if (!payload.category_id) return { error: "費目を選んでください" };
+  if (!payload.rrule) return { error: "繰り返しを決めてください" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("create_recurring_expense", { payload });
+  if (error) return { error: toJapaneseMessage(error.message) };
+
+  refresh();
+  return { ok: true };
+}
+
+export async function updateRecurring(
+  _prev: BudgetFormState,
+  formData: FormData,
+): Promise<BudgetFormState> {
+  const id = String(formData.get("recurring_id") ?? "");
+  if (!id) return { error: "固定費が特定できません" };
+
+  const payload = recurringPayload(formData);
+  if (formData.has("is_active")) {
+    payload.is_active = formData.get("is_active") === "1";
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("update_recurring_expense", {
+    target_recurring_id: id,
+    payload,
+  });
+  if (error) return { error: toJapaneseMessage(error.message) };
+
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * 固定費を、その月の記録にする（FR-B22）。
+ *
+ * ここを通らないかぎり記録にはならない。
+ * 「引き落とされた予定」と「実際に使った額」を混ぜないための一手間。
+ */
+export async function recordRecurring(
+  _prev: BudgetFormState,
+  formData: FormData,
+): Promise<BudgetFormState> {
+  const id = String(formData.get("recurring_id") ?? "");
+  const date = String(formData.get("occurred_on") ?? "");
+  if (!id) return { error: "固定費が特定できません" };
+  if (!isDateKey(date)) return { error: "日付が正しくありません" };
+
+  // 金額の決まっていない固定費は、ここで入れた額を使う
+  const amount = parseAmount(String(formData.get("amount") ?? ""));
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("record_recurring", {
+    target_recurring_id: id,
+    target_date: date,
+    new_amount: amount > 0 ? amount : null,
+  });
+  if (error) return { error: toJapaneseMessage(error.message) };
+
+  refresh();
+  return { ok: true, message: String(formData.get("name") ?? "") };
 }

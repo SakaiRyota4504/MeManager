@@ -83,6 +83,7 @@ export const FEATURES: Feature[] = [
     screens: [
       { label: "メンバー", href: "/settings/members" },
       { label: "費目", href: "/settings/categories" },
+      { label: "固定費", href: "/settings/recurring" },
       { label: "取り込み", href: "/settings/import" },
     ],
   },

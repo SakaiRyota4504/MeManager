@@ -32,6 +32,18 @@ export function monthFirstDay(month: string): string {
   return `${month}-01`;
 }
 
+/**
+ * 翌月の1日。月の終わりは「翌月の1日より前」で表す。
+ *
+ * 末日を求めて「以下」で比べると、月によって28〜31日と変わる場所が増える。
+ * 「次の月の頭より前」なら、どの月でも同じ書き方になる。
+ */
+export function nextMonthFirstDay(month: string): string {
+  const [year, m] = month.split("-").map(Number);
+  // Date.UTC の月は0から数えるので、m はもう翌月を指している
+  return new Date(Date.UTC(year, m, 1)).toISOString().slice(0, 10);
+}
+
 /** "9/21（日）"。一覧の日ごとの見出しに使う */
 export function formatDay(dateKey: string): string {
   const d = fromDateKey(dateKey);

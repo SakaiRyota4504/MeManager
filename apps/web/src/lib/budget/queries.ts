@@ -3,10 +3,11 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type {
   CategoryStatus,
+  RecurringExpense,
   Transaction,
   TrendPoint,
 } from "@/lib/supabase/types";
-import { monthFirstDay } from "@/lib/budget/month";
+import { monthFirstDay, nextMonthFirstDay } from "@/lib/budget/month";
 
 /** 一覧に出す1件。費目の名前と色を一緒に引く */
 export type TransactionView = Transaction & {
@@ -31,15 +32,11 @@ export async function fetchMonthTransactions(
   month: string,
 ): Promise<TransactionView[]> {
   const supabase = await createClient();
-  const start = monthFirstDay(month);
-  const [y, m] = month.split("-").map(Number);
-  const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
-
   const { data } = await supabase
     .from("transactions")
     .select(VIEW_COLUMNS)
-    .gte("occurred_on", start)
-    .lt("occurred_on", next)
+    .gte("occurred_on", monthFirstDay(month))
+    .lt("occurred_on", nextMonthFirstDay(month))
     .order("occurred_on", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -99,4 +96,26 @@ export async function fetchTotalBudget(month: string): Promise<number | null> {
     target_month: monthFirstDay(month),
   });
   return data ?? null;
+}
+
+/** 固定費の登録。隠したものも返す（設定画面で戻せるように） */
+export async function fetchRecurring(): Promise<RecurringExpense[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("recurring_expenses")
+    .select("*")
+    .order("is_active", { ascending: false })
+    .order("created_at");
+  return data ?? [];
+}
+
+/** その月に、どの固定費がもう記録になっているか */
+export async function fetchRecordedRecurring(
+  month: string,
+): Promise<{ recurring_id: string; occurred_on: string }[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("recorded_recurring", {
+    target_month: monthFirstDay(month),
+  });
+  return data ?? [];
 }

@@ -142,6 +142,8 @@ export type Transaction = {
   /** 使った人。抜けた人の記録は null になる */
   member_id: string | null;
   note: string | null;
+  /** どの固定費から入ったか。手で入れた記録は null */
+  recurring_id: string | null;
   created_by: string | null;
   deleted_at: string | null;
 } & Timestamps;
@@ -171,6 +173,23 @@ export type CategoryStatus = {
   /** 直近90日の件数。よく使う順に並べるために使う */
   uses: number;
 };
+
+/** 毎月決まって出ていくもの。自動では記録に入れない（FR-B22） */
+export type RecurringExpense = {
+  id: string;
+  family_id: string;
+  name: string;
+  /** 毎月変わるもの（光熱費）は null。押したときに金額を聞く */
+  amount: number | null;
+  category_id: string;
+  member_id: string | null;
+  /** スケジュールと同じ RRULE */
+  rrule: string;
+  /** 展開の起点 */
+  start_date: string;
+  is_active: boolean;
+  created_by: string | null;
+} & Timestamps;
 
 /** budget_trend() が返す1行。月ごとの合計 */
 export type TrendPoint = {
@@ -293,6 +312,16 @@ export type Database = {
           },
         ];
       };
+      recurring_expenses: {
+        Row: RecurringExpense;
+        Insert: Partial<RecurringExpense> &
+          Pick<
+            RecurringExpense,
+            "family_id" | "name" | "category_id" | "rrule"
+          >;
+        Update: Partial<RecurringExpense>;
+        Relationships: [];
+      };
       budgets: {
         Row: Budget;
         Insert: Partial<Budget> &
@@ -355,6 +384,33 @@ export type Database = {
       budget_status: {
         Args: { target_month?: string | null };
         Returns: CategoryStatus[];
+      };
+      create_recurring_expense: {
+        Args: { payload: Record<string, unknown> };
+        Returns: string;
+      };
+      update_recurring_expense: {
+        Args: {
+          target_recurring_id: string;
+          payload: Record<string, unknown>;
+        };
+        Returns: void;
+      };
+      record_recurring: {
+        Args: {
+          target_recurring_id: string;
+          target_date: string;
+          new_amount?: number | null;
+        };
+        Returns: string;
+      };
+      recorded_recurring: {
+        Args: { target_month?: string | null };
+        Returns: {
+          recurring_id: string;
+          occurred_on: string;
+          amount: number;
+        }[];
       };
       budget_trend: {
         Args: { target_month?: string | null; months?: number };

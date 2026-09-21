@@ -6,9 +6,13 @@ import {
   fetchCategoryStatus,
   fetchDefaultMemberId,
   fetchRecentTransactions,
+  fetchRecordedRecurring,
+  fetchRecurring,
 } from "@/lib/budget/queries";
+import { occurrencesIn } from "@/lib/budget/pending";
 import { formatYen } from "@/lib/budget/money";
 import { EntryForm } from "./entry-form";
+import { PendingRecurring } from "./pending-recurring";
 import { RecentList } from "./recent-list";
 
 export const dynamic = "force-dynamic";
@@ -25,17 +29,27 @@ export default async function BudgetPage() {
   const month = currentMonth();
 
   const supabase = await createClient();
-  const [categories, { data: members }, recent, defaultMemberId] =
-    await Promise.all([
-      fetchCategoryStatus(month),
-      supabase
-        .from("members")
-        .select("*")
-        .eq("is_active", true)
-        .order("created_at"),
-      fetchRecentTransactions(5),
-      fetchDefaultMemberId(session.member.id),
-    ]);
+  const [
+    categories,
+    { data: members },
+    recent,
+    defaultMemberId,
+    recurring,
+    recorded,
+  ] = await Promise.all([
+    fetchCategoryStatus(month),
+    supabase
+      .from("members")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at"),
+    fetchRecentTransactions(5),
+    fetchDefaultMemberId(session.member.id),
+    fetchRecurring(),
+    fetchRecordedRecurring(month),
+  ]);
+
+  const occurrences = occurrencesIn(recurring, month, recorded);
 
   const spent = categories
     .filter((c) => c.kind === "expense")
@@ -50,11 +64,19 @@ export default async function BudgetPage() {
         defaultMemberId={defaultMemberId}
       />
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs text-muted">
-          {formatMonth(month)}は {formatYen(spent)}円 使いました
-        </span>
-        <RecentList rows={recent} members={members ?? []} today={today} />
+      <div className="flex flex-col gap-4">
+        <PendingRecurring
+          occurrences={occurrences}
+          categories={categories}
+          today={today}
+        />
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs text-muted">
+            {formatMonth(month)}は {formatYen(spent)}円 使いました
+          </span>
+          <RecentList rows={recent} members={members ?? []} today={today} />
+        </div>
       </div>
     </div>
   );
