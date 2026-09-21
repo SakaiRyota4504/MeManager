@@ -1891,9 +1891,12 @@ grant execute on function public.set_member_login_email(uuid, text) to authentic
 -- 2. メンバーの追加でも、同時にメールアドレスを登録できるようにする
 -- ---------------------------------------------------------------------------
 
+-- 引数が増えるので、古い形は落としてから作り直す。
 drop function if exists public.add_offline_member(uuid, text);
 
-create function public.add_offline_member(
+-- create or replace にしてあるのは、途中で失敗したときに
+-- そのまま流し直せるようにするため（このファイルは全体がそうなっている）。
+create or replace function public.add_offline_member(
   target_family_id uuid,
   name text,
   login_email text default null
@@ -2076,7 +2079,7 @@ create trigger guard_member_update
 -- ここに別の名前で入る。**家族で共有するデータはここに入れない。**
 -- あくまで「その人の画面の状態」だけを置く。
 
-create table public.user_preferences (
+create table if not exists public.user_preferences (
   member_id  uuid primary key references public.members(id) on delete cascade,
   family_id  uuid not null references public.families(id) on delete cascade,
   prefs      jsonb not null default '{}'::jsonb,
@@ -2087,6 +2090,7 @@ create table public.user_preferences (
 comment on column public.user_preferences.prefs is
   '画面の状態。キーは "schedule.members" のように機能名で始める';
 
+drop trigger if exists set_updated_at on public.user_preferences;
 create trigger set_updated_at
   before update on public.user_preferences
   for each row execute function public.set_updated_at();
@@ -2097,19 +2101,25 @@ create trigger set_updated_at
 
 alter table public.user_preferences enable row level security;
 
+-- 途中で失敗しても流し直せるよう、作り直せる形で書く。
+
+drop policy if exists user_preferences_select on public.user_preferences;
 create policy user_preferences_select on public.user_preferences
   for select to authenticated
   using (member_id = public.my_member_id(family_id));
 
+drop policy if exists user_preferences_insert on public.user_preferences;
 create policy user_preferences_insert on public.user_preferences
   for insert to authenticated
   with check (member_id = public.my_member_id(family_id));
 
+drop policy if exists user_preferences_update on public.user_preferences;
 create policy user_preferences_update on public.user_preferences
   for update to authenticated
   using (member_id = public.my_member_id(family_id))
   with check (member_id = public.my_member_id(family_id));
 
+drop policy if exists user_preferences_delete on public.user_preferences;
 create policy user_preferences_delete on public.user_preferences
   for delete to authenticated
   using (member_id = public.my_member_id(family_id));

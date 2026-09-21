@@ -55,9 +55,14 @@ Supabase（データの置き場）と Vercel（アプリの置き場）を、
 ### 1-2. テーブルを作る
 
 1. リポジトリの **[`supabase/schema.sql`](../supabase/schema.sql)** を開く
-2. 中身を**全部**コピーする（1800行ほどある）
-3. Supabase の画面左の **SQL Editor** を開く
-4. 貼り付けて **Run**（`Ctrl/Cmd + Enter` でも可）
+2. **右上の「Raw」を押す**（重要）
+3. その画面で `Ctrl/Cmd + A` → `Ctrl/Cmd + C` で全部コピーする
+4. Supabase の画面左の **SQL Editor** を開く
+5. 貼り付けて **Run**（`Ctrl/Cmd + Enter` でも可）
+
+> **2 を飛ばさない。** GitHub の通常の表示は、長いファイルを
+> 画面に映っているぶんしか持っていない。そのままコピーすると
+> **途中で切れたものが貼られる**。Raw なら1枚のテキストなので切れない。
 
 **Success. No rows returned** と出れば完了。
 左の **Table Editor** に6つのテーブルが見える。
@@ -318,5 +323,26 @@ Authentication → Users でその人の行を開き、確認済みにするか�
 （3-2 A）。Supabase 側で作る場合（3-2 B）は無くても動く。
 
 **テーブルが見当たらない**
-1-2 の SQL を流し忘れている。SQL Editor で
-`select * from families;` を実行して確かめる。
+1-2 の SQL を流し忘れている。次の確認用の SQL を実行すると、
+どこまで入っているかが1行で分かる。
+
+```sql
+select
+  to_regclass('public.families')         is not null as "土台",
+  to_regclass('public.events')           is not null as "予定",
+  exists (select 1 from information_schema.columns
+          where table_schema = 'public' and table_name = 'members'
+            and column_name = 'login_email')         as "アカウント",
+  to_regclass('public.user_preferences') is not null as "画面の設定";
+```
+
+`false` のところから先が未実行。
+
+**`unterminated dollar-quoted string` と出る**
+貼り付けた SQL が**途中で切れている**。
+関数の中身が閉じないまま終わったときに出るエラーで、
+書いてある行番号は「切れ始めた場所」ではなく「関数が始まった場所」。
+
+GitHub の通常の表示からコピーすると起きる。**Raw の画面からコピーし直す**（1-2）。
+
+> 流し直して構わない。途中まで実行されて困ることはないように書いてある。

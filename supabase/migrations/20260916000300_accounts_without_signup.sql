@@ -80,9 +80,12 @@ grant execute on function public.set_member_login_email(uuid, text) to authentic
 -- 2. メンバーの追加でも、同時にメールアドレスを登録できるようにする
 -- ---------------------------------------------------------------------------
 
+-- 引数が増えるので、古い形は落としてから作り直す。
 drop function if exists public.add_offline_member(uuid, text);
 
-create function public.add_offline_member(
+-- create or replace にしてあるのは、途中で失敗したときに
+-- そのまま流し直せるようにするため（このファイルは全体がそうなっている）。
+create or replace function public.add_offline_member(
   target_family_id uuid,
   name text,
   login_email text default null
