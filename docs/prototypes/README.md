@@ -7,8 +7,10 @@
 | --- | --- | --- |
 | `calendar.html` | カレンダー画面（月表示・一覧表示・絞り込み・予定の追加） | 確認済み |
 | `shell.html` | 機能が4つに増えたときのメニューと画面の並び | 確認済み |
+| `budget.html` | 家計簿の入力画面（10秒で終わるかの確認） | 確認待ち |
 
-`shell.html` で決めたことは [../06-app-shell.md](../06-app-shell.md) にまとめてある。
+`shell.html` で決めたことは [../06-app-shell.md](../06-app-shell.md)、
+`budget.html` は [../07-budget-requirements.md](../07-budget-requirements.md) にまとめてある。
 
 ## 見かた
 
