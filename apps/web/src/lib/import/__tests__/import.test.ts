@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { toIso } from "@/lib/calendar/date";
 import { parseCsv } from "../csv";
 import { parseMoment } from "../datetime";
-import { duplicateKey, readCsv } from "../rows";
+import { decodeFile } from "../encoding";
+import { detectMapping, duplicateKey, emptyMapping, readCsv } from "../rows";
 
 const MEMBERS = [
   { id: "m1", display_name: "父" },
@@ -201,7 +202,9 @@ describe("行を読み替える", () => {
   it("必須の列が無ければ、行は読まずに何が足りないかを返す", () => {
     const result = read("名前,場所\n父,家\n");
     expect(result.rows).toHaveLength(0);
-    expect(result.missing).toEqual(["タイトル（title）", "開始（start）"]);
+    expect(result.missing).toEqual(["タイトル", "開始（日付）"]);
+    expect(result.format).toBe("unknown");
+    expect(result.header).toEqual(["名前", "場所"]);
   });
 
   it("余分な列は無視する", () => {
@@ -235,5 +238,111 @@ describe("重複の見分け方", () => {
     expect(duplicateKey({ title: "A", startDate: "2026-10-10" })).not.toBe(
       duplicateKey({ title: "B", startDate: "2026-10-10" }),
     );
+  });
+});
+
+describe("列の見分けと、手で指定する場合", () => {
+  it("標準形式は自動で見分ける", () => {
+    const { format, mapping } = detectMapping([
+      "external_key",
+      "title",
+      "start",
+      "end",
+    ]);
+    expect(format).toBe("standard");
+    expect(mapping.title).toBe(1);
+    expect(mapping.order).toBe("ymd");
+  });
+
+  it("日本語の見出しも標準形式として見分ける", () => {
+    expect(detectMapping(["タイトル", "開始", "担当者"]).format).toBe(
+      "standard",
+    );
+  });
+
+  it("Google カレンダーの書き出しを見分ける（FR-I03）", () => {
+    const { format, mapping } = detectMapping([
+      "Subject",
+      "Start Date",
+      "Start Time",
+      "End Date",
+      "End Time",
+      "All Day Event",
+      "Description",
+      "Location",
+    ]);
+    expect(format).toBe("google");
+    // 日付が「月/日/年」の並びになる
+    expect(mapping.order).toBe("mdy");
+    expect(mapping.startTime).toBe(2);
+  });
+
+  it("Google の書き出しを実際に読む（月/日/年 と 4:00 PM）", () => {
+    const { rows } = read(
+      "Subject,Start Date,Start Time,End Date,End Time,All Day Event,Location\n" +
+        "参観日,09/19/2026,1:30 PM,09/19/2026,3:00 PM,False,小学校\n" +
+        "運動会,10/10/2026,,10/10/2026,,True,校庭\n",
+    );
+    expect(rows[0]).toMatchObject({
+      title: "参観日",
+      allDay: false,
+      startsAt: toIso("2026-09-19", "13:30"),
+      endsAt: toIso("2026-09-19", "15:00"),
+      location: "小学校",
+      problem: null,
+    });
+    expect(rows[1]).toMatchObject({
+      allDay: true,
+      startDate: "2026-10-10",
+      endDate: "2026-10-10",
+      problem: null,
+    });
+  });
+
+  it("見出しで分からないときは、列を指定すれば読める（FR-I02）", () => {
+    const text = "名前,いつから,どこで\n塾,2026-10-03 17:00,駅前\n";
+    const auto = read(text);
+    expect(auto.format).toBe("unknown");
+    expect(auto.rows).toHaveLength(0);
+
+    const mapping = { ...emptyMapping(), title: 0, start: 1, location: 2 };
+    const manual = readCsv(text, {
+      members: MEMBERS,
+      defaultAssignees: ["m1"],
+      mapping,
+    });
+    expect(manual.rows[0]).toMatchObject({
+      title: "塾",
+      startsAt: toIso("2026-10-03", "17:00"),
+      location: "駅前",
+      problem: null,
+    });
+  });
+});
+
+describe("文字コードを決める", () => {
+  const bytes = (...values: number[]) => new Uint8Array(values).buffer;
+
+  it("UTF-8 はそのまま読む", () => {
+    const utf8 = new TextEncoder().encode("タイトル,開始").buffer;
+    expect(decodeFile(utf8)).toMatchObject({
+      text: "タイトル,開始",
+      used: "utf-8",
+    });
+  });
+
+  it("UTF-8 として筋が通らなければ Shift_JIS として読む", () => {
+    // 「休み」の Shift_JIS
+    const sjis = bytes(0x8b, 0x78, 0x82, 0xdd);
+    const result = decodeFile(sjis);
+    expect(result.used).toBe("shift_jis");
+    expect(result.text).toBe("休み");
+  });
+
+  it("文字コードを手で指定できる", () => {
+    const sjis = bytes(0x8b, 0x78, 0x82, 0xdd);
+    expect(decodeFile(sjis, "shift_jis").text).toBe("休み");
+    // UTF-8 と言い切れば、読めない文字は置き換わる
+    expect(decodeFile(sjis, "utf-8").text).not.toBe("休み");
   });
 });

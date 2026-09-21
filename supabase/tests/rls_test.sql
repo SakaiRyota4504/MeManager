@@ -975,6 +975,82 @@ end
 $$;
 reset role;
 
+\echo '--- 14. 取り込みの設定（プリセット） ---'
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+
+insert into t_ctx
+select 'preset', public.save_import_preset('今月の休日', jsonb_build_object(
+  'assignees', jsonb_build_array((select v from t_ctx where k = 'child')),
+  'duplicates', 'skip'))::text;
+
+select pg_temp.expect(
+  (select settings ->> 'duplicates' from public.import_presets
+   where id = (select v from t_ctx where k = 'preset')::uuid) = 'skip',
+  '取り込みの設定に名前を付けて残せる'
+);
+
+-- 同じ名前で保存し直すと、上書きになる（毎月作り直さない）
+select public.save_import_preset('今月の休日', jsonb_build_object(
+  'assignees', jsonb_build_array((select v from t_ctx where k = 'child')),
+  'duplicates', 'add'));
+
+select pg_temp.expect(
+  (select count(*) from public.import_presets where name = '今月の休日') = 1
+  and (select settings ->> 'duplicates' from public.import_presets
+       where name = '今月の休日') = 'add',
+  '同じ名前で保存し直すと上書きになる'
+);
+
+-- 名前が空のものは作れない
+do $$
+begin
+  begin
+    perform public.save_import_preset('   ', '{}'::jsonb);
+    raise exception 'FAILED: 名前なしの設定が保存できた';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   名前のない設定は保存できない';
+  end;
+end
+$$;
+reset role;
+
+-- 家族の中では共有される（FR-I18）。別の家族からは見えない
+select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
+select pg_temp.expect(
+  (select count(*) from public.import_presets) = 1,
+  '同じ家族の他のメンバーからも見える'
+);
+reset role;
+
+select pg_temp.login_as('22222222-2222-2222-2222-222222222222');
+select pg_temp.expect(
+  (select count(*) from public.import_presets) = 0,
+  '別の家族からは見えない'
+);
+reset role;
+
+-- 取り込みで繰り返しルールを引き継げる（.ics 用・FR-I05）
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+select public.commit_import(jsonb_build_object(
+  'calendar_id', (select v from t_ctx where k = 'cal'),
+  'name', 'ics の取り込み',
+  'source', 'ics',
+  'rows', jsonb_build_array(jsonb_build_object(
+    'title', 'ピアノ（ics）', 'all_day', true,
+    'start_date', '2026-11-03', 'end_date', '2026-11-03',
+    'rrule', 'FREQ=WEEKLY;BYDAY=TU',
+    'assignees', jsonb_build_array((select v from t_ctx where k = 'child'))))));
+
+select pg_temp.expect(
+  (select rrule from public.events where title = 'ピアノ（ics）')
+    = 'FREQ=WEEKLY;BYDAY=TU',
+  '取り込んだ予定にも繰り返しルールが入る'
+);
+reset role;
+
 rollback;
 
 \echo ''

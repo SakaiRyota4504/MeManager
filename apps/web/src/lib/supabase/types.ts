@@ -82,6 +82,15 @@ export type ImportBatch = {
   deleted_at: string | null;
 };
 
+/** 取り込みの設定。名前を付けて残し、家族で共有する */
+export type ImportPreset = {
+  id: string;
+  family_id: string;
+  name: string;
+  settings: Record<string, unknown>;
+  created_by: string | null;
+} & Timestamps;
+
 /** 繰り返し予定のうち、出さない回 */
 export type EventException = {
   event_id: string;
@@ -163,6 +172,13 @@ export type Database = {
         Update: Partial<ImportBatch>;
         Relationships: [];
       };
+      import_presets: {
+        Row: ImportPreset;
+        Insert: Partial<ImportPreset> &
+          Pick<ImportPreset, "family_id" | "name">;
+        Update: Partial<ImportPreset>;
+        Relationships: [];
+      };
       event_exceptions: {
         Row: EventException;
         Insert: Pick<EventException, "event_id" | "occurrence_date">;
@@ -222,6 +238,10 @@ export type Database = {
       commit_import: {
         Args: { payload: Record<string, unknown> };
         Returns: { batch_id: string; count: number };
+      };
+      save_import_preset: {
+        Args: { preset_name: string; settings: Record<string, unknown> };
+        Returns: string;
       };
       delete_import_batch: {
         Args: { target_batch_id: string };

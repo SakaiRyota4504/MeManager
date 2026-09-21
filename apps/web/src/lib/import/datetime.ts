@@ -18,13 +18,33 @@ const DATE_ONLY = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/;
 const DATE_TIME =
   /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?$/;
 
+/** 月/日/年。Google カレンダーの書き出しがこの並び */
+const MDY = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+/** 4:00 PM のような書き方 */
+const AMPM = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp])\.?[Mm]\.?$/;
+
+/** 日付の並び。標準形式は年から、Google の書き出しは月から */
+export type DateOrder = "ymd" | "mdy";
+
 function pad(value: string | number, size = 2): string {
   return String(value).padStart(size, "0");
 }
 
-export function parseMoment(raw: string): Moment | null {
+export function parseMoment(
+  raw: string,
+  order: DateOrder = "ymd",
+): Moment | null {
   const value = raw.trim();
   if (value === "") return null;
+
+  if (order === "mdy") {
+    const mdy = MDY.exec(value);
+    if (mdy) {
+      const [, m, d, y] = mdy;
+      const date = `${y}-${pad(m)}-${pad(d)}`;
+      return isRealDate(date) ? { kind: "date", date } : null;
+    }
+  }
 
   const dateOnly = DATE_ONLY.exec(value);
   if (dateOnly) {
@@ -74,3 +94,40 @@ export function defaultEnd(startIso: string): string {
 }
 
 export { APP_TIME_ZONE };
+
+/**
+ * 日付の列と時刻の列が分かれている形（Google カレンダーの書き出し）を1つにする。
+ * 時刻が空なら日付だけとして返す。
+ */
+export function combine(
+  dateRaw: string,
+  timeRaw: string,
+  order: DateOrder = "ymd",
+): Moment | null {
+  const day = parseMoment(dateRaw, order);
+  if (!day || day.kind !== "date") return day;
+
+  const time = parseClock(timeRaw);
+  if (!time) return day;
+  return { kind: "time", iso: toIso(day.date, time) };
+}
+
+/** "16:00" や "4:00 PM" を "HH:MM" にする */
+export function parseClock(raw: string): string | null {
+  const value = raw.trim();
+  if (value === "") return null;
+
+  const ampm = AMPM.exec(value);
+  if (ampm) {
+    const [, h, m, , half] = ampm;
+    let hour = Number(h) % 12;
+    if (half.toLowerCase() === "p") hour += 12;
+    if (Number(m) > 59) return null;
+    return `${pad(hour)}:${m}`;
+  }
+
+  const plain = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(value);
+  if (!plain) return null;
+  if (Number(plain[1]) > 23 || Number(plain[2]) > 59) return null;
+  return `${pad(plain[1])}:${plain[2]}`;
+}

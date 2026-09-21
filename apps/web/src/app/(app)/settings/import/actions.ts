@@ -4,7 +4,15 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { formatTime } from "@/lib/calendar/date";
-import { duplicateKey, readCsv, type ImportRow } from "@/lib/import/rows";
+import type { Encoding } from "@/lib/import/encoding";
+import {
+  duplicateKey,
+  readCsv,
+  type ImportRow,
+  type Format,
+  type Mapping,
+} from "@/lib/import/rows";
+import { readIcs } from "@/lib/import/ics";
 
 export type PreviewRow = {
   line: number;
@@ -21,9 +29,24 @@ export type Preview = {
   rows: PreviewRow[];
   counts: { total: number; add: number; duplicate: number; problem: number };
   range: { from: string; to: string } | null;
+  /** 列の指定画面のために返す */
+  header: string[];
+  mapping: Mapping | null;
+  format: Format;
 };
 
-export type PreviewResult = Preview | { ok: false; error: string };
+export type Source = "csv" | "ics";
+
+export type PreviewResult =
+  | Preview
+  | {
+      ok: false;
+      error: string;
+      /** 列が決まらなかったときだけ、指定画面を出すために返す */
+      header?: string[];
+      mapping?: Mapping | null;
+      format?: Format;
+    };
 
 export type ImportSettings = {
   /** 画面で一括指定した担当者。CSV に列があればそちらが優先される */
@@ -33,6 +56,9 @@ export type ImportSettings = {
   /** 取り込まない行（FR-I13） */
   excluded: number[];
   fileName: string;
+  source: Source;
+  /** 列の対応。null なら見出しから見分ける */
+  mapping: Mapping | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -62,10 +88,12 @@ function whenLabel(row: ImportRow): string {
  *
  * ここでは何も書き込まない。読めない行と、すでにある行を数えて返すだけ。
  */
-export async function previewImport(
-  text: string,
-  assignees: string[],
-): Promise<PreviewResult> {
+export async function previewImport(input: {
+  text: string;
+  source: Source;
+  assignees: string[];
+  mapping: Mapping | null;
+}): Promise<PreviewResult> {
   const supabase = await createClient();
 
   const { data: members } = await supabase
@@ -73,20 +101,21 @@ export async function previewImport(
     .select("id, display_name")
     .eq("is_active", true);
 
-  const { rows, missing } = readCsv(text, {
-    members: members ?? [],
-    defaultAssignees: assignees,
-  });
+  const read = readFile(input, members ?? []);
 
-  if (missing.length > 0) {
+  if (read.missing.length > 0) {
     return {
       ok: false,
-      error: `列が足りません: ${missing.join("、")}。1行目に列名が要ります。`,
+      error: `どの列が何かを指定してください: ${read.missing.join("、")}`,
+      header: read.header,
+      mapping: read.mapping,
+      format: read.format,
     };
   }
-  if (rows.length === 0) {
+  if (read.rows.length === 0) {
     return { ok: false, error: "取り込む行がありません" };
   }
+  const rows = read.rows;
 
   const existing = await existingKeys(rows);
   const nameOf = new Map((members ?? []).map((m) => [m.id, m.display_name]));
@@ -113,7 +142,45 @@ export async function previewImport(
     },
     range:
       dates.length > 0 ? { from: dates[0], to: dates[dates.length - 1] } : null,
+    header: read.header,
+    mapping: read.mapping,
+    format: read.format,
   };
+}
+
+/** CSV と .ics を、同じ形の行にそろえる */
+function readFile(
+  input: {
+    text: string;
+    source: Source;
+    assignees: string[];
+    mapping: Mapping | null;
+  },
+  members: { id: string; display_name: string }[],
+): {
+  rows: ImportRow[];
+  header: string[];
+  mapping: Mapping | null;
+  format: Format;
+  missing: string[];
+} {
+  if (input.source === "ics") {
+    return {
+      rows: readIcs(input.text, {
+        members,
+        defaultAssignees: input.assignees,
+      }),
+      header: [],
+      mapping: null,
+      format: "standard",
+      missing: [],
+    };
+  }
+  return readCsv(input.text, {
+    members,
+    defaultAssignees: input.assignees,
+    mapping: input.mapping,
+  });
 }
 
 /**
@@ -169,13 +236,22 @@ export async function runImport(
   const calendarId = calendars?.[0]?.id;
   if (!calendarId) return { ok: false, error: "カレンダーが見つかりません" };
 
-  const { rows, missing } = readCsv(text, {
-    members: members ?? [],
-    defaultAssignees: settings.assignees,
-  });
-  if (missing.length > 0) {
-    return { ok: false, error: `列が足りません: ${missing.join("、")}` };
+  const read = readFile(
+    {
+      text,
+      source: settings.source,
+      assignees: settings.assignees,
+      mapping: settings.mapping,
+    },
+    members ?? [],
+  );
+  if (read.missing.length > 0) {
+    return {
+      ok: false,
+      error: `列の指定が足りません: ${read.missing.join("、")}`,
+    };
   }
+  const rows = read.rows;
 
   const existing = await existingKeys(rows);
   const excluded = new Set(settings.excluded);
@@ -198,7 +274,7 @@ export async function runImport(
       calendar_id: calendarId,
       name: batchName(settings.fileName),
       file_name: settings.fileName || null,
-      source: "csv",
+      source: settings.source,
       rows: target.map((row) => ({
         external_key: row.externalKey,
         title: row.title,
@@ -211,6 +287,7 @@ export async function runImport(
         location: row.location,
         description: row.description,
         color: row.color,
+        rrule: row.rrule,
         assignees: row.assignees,
       })),
     },
@@ -306,4 +383,49 @@ export async function batchSummary(batchId: string): Promise<BatchSummary> {
     from: dates[0] ?? null,
     to: dates[dates.length - 1] ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 取り込みの設定を残す（FR-I17）
+// ---------------------------------------------------------------------------
+
+/** 名前を付けて残す中身。毎月同じ指定をやり直さないためのもの */
+export type PresetSettings = {
+  assignees: string[];
+  duplicates: "skip" | "add";
+  mapping: Mapping | null;
+  encoding: Encoding;
+};
+
+export type Preset = { id: string; name: string; settings: PresetSettings };
+
+export async function savePreset(
+  name: string,
+  settings: PresetSettings,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("save_import_preset", {
+    preset_name: name,
+    settings,
+  });
+  if (error) {
+    return {
+      ok: false,
+      error: /PRESET_NAME_REQUIRED/.test(error.message)
+        ? "名前を入力してください"
+        : error.message,
+    };
+  }
+  revalidatePath("/settings/import");
+  return { ok: true };
+}
+
+export async function deletePreset(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("import_presets").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/settings/import");
+  return { ok: true };
 }
