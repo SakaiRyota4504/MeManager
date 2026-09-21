@@ -286,7 +286,7 @@
 <div class="page">
   <div class="lead">
     <h1>レジを出てから10秒で終わるか</h1>
-    <p>家計簿が続かない理由は入力の面倒さなので、そこだけを確かめる試作です。金額を入れて費目を押すと保存できます。日付・支払方法・使った人は前回のままでよければ触りません。費目を選ぶと、その費目の今月の残りが出ます。</p>
+    <p>家計簿が続かない理由は入力の面倒さなので、そこだけを確かめる試作です。金額を入れて費目を押すと保存できます。日付と使った人は前回のままでよければ触りません。費目を選ぶと、その費目の今月の残りが出ます。</p>
     <div class="controls">
       <div class="seg" role="group" aria-label="画面の幅">
         <button type="button" id="w-wide" aria-pressed="true">パソコン</button>
@@ -318,8 +318,9 @@
   <div class="notes">
     <div class="note-card">
       <h3>触るのは2か所だけ</h3>
-      <p><strong>金額を入れて、費目を押す。</strong>それで保存できます。日付は今日、支払方法と使った人は前回と同じが既定で、変えたいときだけ点線の行を開きます。</p>
+      <p><strong>金額を入れて、費目を押す。</strong>それで保存できます。日付は今日、使った人は前回と同じが既定で、変えたいときだけ点線の行を開きます。</p>
       <p>費目は色の付いた丸ボタンで、よく使う順に並べます。プルダウンは開かせません。</p>
+      <p><strong>支払方法（現金・カード）は持ちません。</strong>残高を追わないので何の計算にも使われず、毎回埋めさせる理由がないためです。</p>
     </div>
     <div class="note-card">
       <h3>予算は使った直後に出す</h3>
@@ -343,7 +344,6 @@
     { id: "util",  name: "光熱費", color: "--c-util",  budget: 25000, used: 12640 },
     { id: "comm",  name: "通信",   color: "--c-comm",  budget: 12000, used: 11800 },
   ];
-  const METHODS = ["現金", "楽天カード", "電子マネー"];
   const MEMBERS = ["父", "母", "たろう"];
   const SCREENS = ["入力", "一覧", "集計"];
 
@@ -352,17 +352,16 @@
     amount: "",
     category: null,
     date: "2026-09-21",
-    method: "現金",
     member: "父",
     note: "",
     open: false,
     toast: "",
     items: [
-      { date: "2026-09-20", title: "スーパー", cat: "food",  amount: 4280, method: "楽天カード", member: "母" },
-      { date: "2026-09-20", title: "ドラッグストア", cat: "daily", amount: 1980, method: "現金", member: "母" },
-      { date: "2026-09-19", title: "ガソリン", cat: "trans", amount: 6500, method: "楽天カード", member: "父" },
-      { date: "2026-09-19", title: "ラーメン", cat: "eat", amount: 2400, method: "現金", member: "父" },
-      { date: "2026-09-18", title: "電気代", cat: "util", amount: 12640, method: "楽天カード", member: "父" },
+      { date: "2026-09-20", title: "スーパー", cat: "food",  amount: 4280, member: "母" },
+      { date: "2026-09-20", title: "ドラッグストア", cat: "daily", amount: 1980, member: "母" },
+      { date: "2026-09-19", title: "ガソリン", cat: "trans", amount: 6500, member: "父" },
+      { date: "2026-09-19", title: "ラーメン", cat: "eat", amount: 2400, member: "父" },
+      { date: "2026-09-18", title: "電気代", cat: "util", amount: 12640, member: "父" },
     ],
   };
 
@@ -436,7 +435,7 @@
           </div>` : ""}
 
           <button type="button" class="defaults" id="toggle">
-            ${Number(state.date.slice(5, 7))}/${Number(state.date.slice(8))}（今日） ・ ${state.method} ・ ${state.member}
+            ${Number(state.date.slice(5, 7))}/${Number(state.date.slice(8))}（今日） ・ ${state.member}
             <span class="caret">${state.open ? "閉じる" : "変える"}</span>
           </button>
 
@@ -444,8 +443,6 @@
           <div class="more">
             <div class="row"><span class="label">日付</span>
               <input type="date" id="date" value="${state.date}"></div>
-            <div class="row"><span class="label">支払</span>
-              <select id="method">${METHODS.map((m) => `<option ${m === state.method ? "selected" : ""}>${m}</option>`).join("")}</select></div>
             <div class="row"><span class="label">使った人</span>
               <select id="member">${MEMBERS.map((m) => `<option ${m === state.member ? "selected" : ""}>${m}</option>`).join("")}</select></div>
             <div class="row"><span class="label">メモ</span>
@@ -476,7 +473,7 @@
           return `<div class="item">
             <span class="dot" style="background:var(${c.color})"></span>
             <span class="main"><span class="t">${i.title || c.name}</span>
-              <span class="s">${c.name} ・ ${i.method} ・ ${i.member}</span></span>
+              <span class="s">${c.name} ・ ${i.member}</span></span>
             <span class="amt num">${yen(i.amount)}円</span></div>`;
         }).join("")}`;
     }).join("")}</div>`;
@@ -556,7 +553,7 @@
       c.used += amount;
       state.items.unshift({
         date: state.date, title: state.note, cat: c.id,
-        amount, method: state.method, member: state.member,
+        amount, member: state.member,
       });
       state.toast = `${c.name} ${yen(amount)}円 を記録しました（残り ${yen(Math.max(0, c.budget - c.used))}円）`;
       state.amount = ""; state.category = null; state.note = ""; state.open = false;
@@ -567,7 +564,6 @@
   document.addEventListener("change", (e) => {
     const t = e.target;
     if (t.id === "date") state.date = t.value;
-    if (t.id === "method") state.method = t.value;
     if (t.id === "member") state.member = t.value;
     if (t.id === "note") state.note = t.value;
   });
