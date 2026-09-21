@@ -43,8 +43,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <ScreenTabs />
 
       {/* 左右の余白は画面ごとに決める。
-          カレンダーは端まで使い、それ以外は読みやすい幅で中央に寄せる。 */}
-      <div className="flex w-full flex-1 flex-col">{children}</div>
+          カレンダーは端まで使い、それ以外は読みやすい幅で中央に寄せる。
+
+          縦のスクロールはここでは持たない。スクロールする箱を重ねると、
+          なぞって操作したときに外側が一緒に動いてしまう。 */}
+      <div className="flex min-h-0 w-full flex-1 flex-col">{children}</div>
 
       <BottomBarSpacer />
       <BottomBar />

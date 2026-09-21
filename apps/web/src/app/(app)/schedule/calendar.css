@@ -214,22 +214,237 @@
   }
 }
 
+.cal-break {
+  display: none;
+}
+
 /* 指で押せる大きさ（44px）を確保する */
 @media (max-width: 900px) {
   .cal-nav-btn {
     width: 44px;
     height: 44px;
   }
-  /* 絞り込みと月／一覧は、狭い画面では2行目にまとめて回す */
+  /* 狭い画面では「‹ › 見出し」で1行、残りを2行目にまとめる。
+     3行に増やすと、そのぶんカレンダーが下がる。
+
+     見出しの長さは月・週・日で変わるので、どこで折り返すかを
+     幅まかせにしない。高さ0の要素で行を区切る。 */
+  .cal-break {
+    display: block;
+    order: 1;
+    flex-basis: 100%;
+    height: 0;
+  }
+  .cal-actions {
+    order: 2;
+  }
   .cal-tools {
-    width: 100%;
     order: 3;
+    flex: 1;
+    /* min-width の既定（auto＝中身の幅）のままだと、
+       2行目に入りきらないと判断されて3行目に落ちる */
+    min-width: 0;
   }
   .cal-seg {
     flex: 1;
+    min-width: 0;
+  }
+  .cal-seg button {
+    padding: 9px 2px;
+    min-width: 0;
+    /* 「一覧」が縦2文字に折れて、ボタンだけ背が高くなるのを防ぐ */
+    white-space: nowrap;
   }
   .cal-seg button {
     flex: 1;
     padding: 9px 20px;
+  }
+}
+
+/* ===========================================================================
+   週表示・日表示。縦が時刻、横が日。
+   =========================================================================== */
+
+/* --wk-hour は week-view.tsx から渡す。
+   CSS 側で上書きすると、罫線と予定の位置がずれる。 */
+.wk {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.wk-head,
+.wk-allday,
+.wk-grid {
+  display: grid;
+}
+
+.wk-head {
+  border-bottom: 1px solid var(--color-border);
+}
+.wk-dayhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 0;
+  border-left: 1px solid var(--color-border);
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.wk-dayhead .wk-dn {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.wk-dayhead.is-sun .wk-wd {
+  color: var(--color-sun);
+}
+.wk-dayhead.is-sat .wk-wd {
+  color: var(--color-sat);
+}
+.wk-dayhead.is-today .wk-dn {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+
+/* 終日の帯。件数ぶん伸びるが、伸びすぎないように上限を付ける */
+.wk-allday {
+  border-bottom: 1px solid var(--color-border);
+  max-height: 84px;
+  overflow-y: auto;
+}
+.wk-gutter {
+  font-size: 10.5px;
+  color: var(--color-muted);
+  text-align: right;
+  padding: 3px 4px 0 0;
+}
+.wk-adcol {
+  border-left: 1px solid var(--color-border);
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* 本体。ここだけが縦にスクロールする */
+.wk-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.wk-grid {
+  position: relative;
+  /* なぞって予定を作るので、文字の選択は起こさない */
+  user-select: none;
+}
+
+.wk-hours {
+  display: flex;
+  flex-direction: column;
+}
+.wk-hour {
+  height: var(--wk-hour);
+  position: relative;
+}
+.wk-hour span {
+  position: absolute;
+  top: -7px;
+  right: 4px;
+  font-size: 10.5px;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wk-col {
+  position: relative;
+  border-left: 1px solid var(--color-border);
+  touch-action: pan-y;
+  min-width: 0;
+}
+.wk-col.is-today {
+  background: var(--color-today);
+}
+.wk-line {
+  height: var(--wk-hour);
+  border-top: 1px solid var(--color-border);
+}
+.wk-line:first-child {
+  border-top: 0;
+}
+
+/* 予定の箱。重なっているぶんだけ横に割る */
+.wk-ev {
+  position: absolute;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+  padding: 1px 3px;
+  border: 0;
+  border-left: 3px solid var(--color-accent);
+  border-radius: 3px;
+  background: var(--color-surface-2);
+  box-shadow: 0 0 0 1px var(--color-background);
+}
+.wk-ev-time {
+  font-size: 9.5px;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+.wk-ev-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wk-ev.is-cancelled {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.wk-ev.is-tentative {
+  border-left-style: dashed;
+}
+
+/* なぞっている間の目安 */
+.wk-draft {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  border-radius: 3px;
+  background: var(--color-accent);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+/* いまの時刻 */
+.wk-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px solid var(--color-sun);
+  pointer-events: none;
+}
+
+@media (max-width: 860px) {
+  .wk-ev {
+    font-size: 10px;
+    padding: 1px 2px;
+    border-left-width: 2px;
+  }
+  .wk-ev-time {
+    display: none;
   }
 }

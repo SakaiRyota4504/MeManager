@@ -9,7 +9,7 @@ import { Field, FormError, SubmitButton } from "@/components/form";
 import { createEvent, updateEvent, type EventFormState } from "./actions";
 
 type Initial =
-  | { mode: "create"; date: string }
+  | { mode: "create"; date: string; startTime?: string; endTime?: string }
   | { mode: "edit"; event: EventWithAssignees };
 
 export function EventPanel({
@@ -52,15 +52,20 @@ export function EventPanel({
         : eventDateKey(editing.ends_at!, editing.timezone)
       : touched,
   );
+  // 週表示でなぞって作ったときは、その時刻から始める。
   const [startTime, setStartTime] = useState(
     editing && !editing.all_day
       ? formatTime(editing.starts_at!, editing.timezone)
-      : "09:00",
+      : initial.mode === "create" && initial.startTime
+        ? initial.startTime
+        : "09:00",
   );
   const [endTime, setEndTime] = useState(
     editing && !editing.all_day
       ? formatTime(editing.ends_at!, editing.timezone)
-      : "10:00",
+      : initial.mode === "create" && initial.endTime
+        ? initial.endTime
+        : "10:00",
   );
 
   // 開始日を動かしたとき、終了日が同じ日か前の日なら一緒に動かす。

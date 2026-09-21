@@ -23,7 +23,7 @@ export default async function MembersPage() {
   const inactive = allMembers?.filter((m) => !m.is_active) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-10 px-6 py-8">
+    <div className="mx-auto w-full max-w-3xl space-y-10 overflow-y-auto px-6 py-8">
       <section className="space-y-4">
         <div className="space-y-1">
           <FamilyName

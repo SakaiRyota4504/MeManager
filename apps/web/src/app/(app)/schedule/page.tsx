@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { fetchEvents } from "@/lib/calendar/events";
-import { monthRange, toMonthKey } from "@/lib/calendar/date";
+import { isView, rangeFor, todayKey } from "@/lib/calendar/date";
 import { parseSelected, SCHEDULE_FILTER_KEY } from "@/lib/calendar/filter";
 import { CalendarView } from "./calendar-view";
 
@@ -13,13 +13,16 @@ export default async function SchedulePage(props: PageProps<"/schedule">) {
   const session = await requireSession();
   const params = await props.searchParams;
 
-  const month =
-    typeof params.month === "string" && /^\d{4}-\d{2}$/.test(params.month)
-      ? params.month
-      : toMonthKey(new Date());
+  // 見せ方と、どこを見ているか。どちらも URL に持たせる。
+  // 「この週を見て」と家族にリンクを送れるようにするため。
+  const view = isView(params.view) ? params.view : "month";
+  const date =
+    typeof params.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.date)
+      ? params.date
+      : todayKey();
 
   const weekStart = session.family.week_start ?? 0;
-  const { fromDate, toDate } = monthRange(month, weekStart);
+  const { fromDate, toDate } = rangeFor(view, date, weekStart);
 
   const supabase = await createClient();
   const [{ data: members }, { data: calendars }, { data: saved }, events] =
@@ -59,7 +62,8 @@ export default async function SchedulePage(props: PageProps<"/schedule">) {
 
   return (
     <CalendarView
-      month={month}
+      view={view}
+      date={date}
       weekStart={weekStart}
       members={members ?? []}
       calendars={calendars}

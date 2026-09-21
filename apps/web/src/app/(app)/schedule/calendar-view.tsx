@@ -7,14 +7,17 @@ import type { Calendar, Member } from "@/lib/supabase/types";
 import type { EventWithAssignees } from "@/lib/calendar/model";
 import { eventColor, groupByDate } from "@/lib/calendar/model";
 import {
+  VIEWS,
   WEEKDAYS,
-  formatMonth,
+  formatRange,
   formatTime,
   monthGridDays,
-  shiftMonth,
+  shiftView,
+  weekDays,
   toDateKey,
   toMonthKey,
   todayKey,
+  type View,
 } from "@/lib/calendar/date";
 import {
   filterEvents,
@@ -25,13 +28,13 @@ import {
 import { EventPanel } from "./event-panel";
 import { EventDetail } from "./event-detail";
 import { FilterMenu } from "./filter-menu";
+import { WeekView } from "./week-view";
 import { saveScheduleFilter } from "./actions";
 import "./calendar.css";
 
-type View = "month" | "list";
-
 export function CalendarView({
-  month,
+  view,
+  date,
   weekStart,
   members,
   calendars,
@@ -39,7 +42,8 @@ export function CalendarView({
   selfMemberId,
   selected: initialSelected,
 }: {
-  month: string;
+  view: View;
+  date: string;
   weekStart: number;
   members: Member[];
   calendars: Calendar[];
@@ -49,13 +53,10 @@ export function CalendarView({
 }) {
   const router = useRouter();
   const today = todayKey();
+  const month = date.slice(0, 7);
 
-  // 既定は画面幅によらず月表示。
-  // 「今月どうなっているか」を最初に見たいので、まずカレンダーを出す。
-  // 一覧は切り替えで出す（狭い画面では件数の多い日を読むのに使う）。
-  const [view, setView] = useState<View>("month");
   const [editing, setEditing] = useState<
-    | { mode: "create"; date: string }
+    | { mode: "create"; date: string; startTime?: string; endTime?: string }
     | { mode: "edit"; event: EventWithAssignees }
     | null
   >(null);
@@ -80,21 +81,79 @@ export function CalendarView({
     void saveScheduleFilter(value).catch(() => {});
   }, []);
 
+  // 見せ方と日付は URL に持たせているので、移動はサーバーに投げ直す。
+  // 取る期間が変わるため（絞り込みだけはクライアントで済ませている）。
+  const goTo = useCallback(
+    (nextView: View, nextDate: string) => {
+      const query = new URLSearchParams({ view: nextView, date: nextDate });
+      if (selected !== null) query.set("m", serializeSelected(selected));
+      router.push(`/schedule?${query}`);
+    },
+    [router, selected],
+  );
+  const go = useCallback(
+    (delta: number) => goTo(view, shiftView(view, date, delta)),
+    [goTo, view, date],
+  );
+
   const openPanel = editing !== null || detail !== null;
 
-  // 「自分の予定のみ」の出し入れ（FR-M06）。入力中とパネル表示中は邪魔しない。
+  // キーボードだけで動かせるようにする（9.3 節）。
+  // 入力中とパネル表示中は、画面の裏側を動かさない。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "m" && e.key !== "M") return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (openPanel) return;
       const el = e.target as HTMLElement | null;
       if (el?.closest("input, textarea, select, [contenteditable]")) return;
-      changeFilter(isSelfOnly(selected, selfMemberId) ? null : [selfMemberId]);
+
+      switch (e.key) {
+        case "ArrowLeft":
+          go(-1);
+          break;
+        case "ArrowRight":
+          go(1);
+          break;
+        case "t":
+        case "T":
+          goTo(view, today);
+          break;
+        case "n":
+        case "N":
+          setEditing({ mode: "create", date: view === "month" ? today : date });
+          break;
+        case "m":
+        case "M":
+          changeFilter(
+            isSelfOnly(selected, selfMemberId) ? null : [selfMemberId],
+          );
+          break;
+        case "1":
+        case "2":
+        case "3":
+        case "4": {
+          const next = VIEWS[Number(e.key) - 1];
+          if (next) goTo(next.id, date);
+          break;
+        }
+        default:
+          return;
+      }
+      e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [changeFilter, openPanel, selected, selfMemberId]);
+  }, [
+    changeFilter,
+    date,
+    go,
+    goTo,
+    openPanel,
+    selected,
+    selfMemberId,
+    today,
+    view,
+  ]);
 
   const shown = useMemo(
     () => filterEvents(events, selected),
@@ -106,13 +165,6 @@ export function CalendarView({
     [month, weekStart],
   );
   const defaultCalendar = calendars.find((c) => c.is_default) ?? calendars[0];
-
-  const goMonth = (next: string) => {
-    const query = new URLSearchParams({ month: next });
-    if (selected !== null) query.set("m", serializeSelected(selected));
-    router.push(`/schedule?${query}`);
-  };
-  const go = (delta: number) => goMonth(shiftMonth(month, delta));
 
   const weekdayLabels = Array.from(
     { length: 7 },
@@ -131,12 +183,12 @@ export function CalendarView({
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-3 py-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 py-3">
       <div className="flex flex-wrap items-center gap-2 px-3">
         <button
           type="button"
           onClick={() => go(-1)}
-          aria-label="前の月"
+          aria-label="前へ"
           className="cal-nav-btn grid size-8 place-items-center rounded-md border border-border-strong"
         >
           ‹
@@ -144,29 +196,41 @@ export function CalendarView({
         <button
           type="button"
           onClick={() => go(1)}
-          aria-label="次の月"
+          aria-label="次へ"
           className="cal-nav-btn grid size-8 place-items-center rounded-md border border-border-strong"
         >
           ›
         </button>
-        <h1 className="text-lg font-bold tabular-nums">{formatMonth(month)}</h1>
-        <button
-          type="button"
-          onClick={() => goMonth(toMonthKey(new Date()))}
-          className="rounded-md border border-border-strong px-3 py-1 text-sm"
-        >
-          今日
-        </button>
-        {/* 予定はマスを押して追加する。この＋は一覧表示のときの入口 */}
-        <button
-          type="button"
-          onClick={() => setEditing({ mode: "create", date: today })}
-          aria-label="予定を追加"
-          title="予定を追加"
-          className="cal-nav-btn grid size-8 place-items-center rounded-md bg-accent text-lg leading-none text-accent-fg"
-        >
-          ＋
-        </button>
+        <h1 className="text-lg font-bold tabular-nums">
+          {formatRange(view, date, weekStart)}
+        </h1>
+        {/* 狭い画面で、ここから下を必ず2行目に送る（下の .cal-break 参照） */}
+        <div aria-hidden className="cal-break" />
+
+        <div className="cal-actions flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => goTo(view, today)}
+            className="rounded-md border border-border-strong px-3 py-1 text-sm"
+          >
+            今日
+          </button>
+          {/* 予定はマスを押して追加する。この＋は一覧表示のときの入口 */}
+          <button
+            type="button"
+            onClick={() =>
+              setEditing({
+                mode: "create",
+                date: view === "month" ? today : date,
+              })
+            }
+            aria-label="予定を追加"
+            title="予定を追加"
+            className="cal-nav-btn grid size-8 place-items-center rounded-md bg-accent text-lg leading-none text-accent-fg"
+          >
+            ＋
+          </button>
+        </div>
 
         <div className="cal-tools ml-auto flex items-center gap-2">
           <FilterMenu
@@ -176,24 +240,38 @@ export function CalendarView({
             onChange={changeFilter}
           />
           <div className="cal-seg inline-flex overflow-hidden rounded-md border border-border-strong">
-            {(["month", "list"] as const).map((v) => (
+            {VIEWS.map((v) => (
               <button
-                key={v}
+                key={v.id}
                 type="button"
-                aria-pressed={view === v}
-                onClick={() => setView(v)}
-                className={`px-4 py-1.5 text-sm ${
-                  view === v ? "bg-accent text-accent-fg" : ""
+                aria-pressed={view === v.id}
+                onClick={() => goTo(v.id, date)}
+                className={`px-3 py-1.5 text-sm ${
+                  view === v.id ? "bg-accent text-accent-fg" : ""
                 }`}
               >
-                {v === "month" ? "月" : "一覧"}
+                {v.label}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {view === "month" ? (
+      {view === "week" || view === "day" ? (
+        <WeekView
+          days={
+            view === "day"
+              ? [date]
+              : weekDays(date, weekStart).map((d) => toDateKey(d))
+          }
+          events={shown}
+          chipFor={chipFor}
+          onSelect={setDetail}
+          onCreate={(day, startTime, endTime) =>
+            setEditing({ mode: "create", date: day, startTime, endTime })
+          }
+        />
+      ) : view === "month" ? (
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="cal-weekhead">
             {weekdayLabels.map((w) => (
@@ -243,7 +321,7 @@ export function CalendarView({
                     <button
                       type="button"
                       className="cal-more"
-                      onClick={() => setView("list")}
+                      onClick={() => goTo("day", key)}
                     >
                       他 {list.length - limit} 件
                     </button>
@@ -287,7 +365,11 @@ export function CalendarView({
 
       {editing && defaultCalendar && (
         <EventPanel
-          key={editing.mode === "edit" ? editing.event.id : editing.date}
+          key={
+            editing.mode === "edit"
+              ? editing.event.id
+              : `${editing.date}-${editing.startTime ?? ""}`
+          }
           members={members}
           defaultCalendarId={defaultCalendar.id}
           selfMemberId={selfMemberId}
