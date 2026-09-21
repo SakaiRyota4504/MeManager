@@ -717,6 +717,143 @@ select pg_temp.expect(
   '2人ぶんの行がある（RLS を外して見れば）'
 );
 
+\echo '--- 12. 繰り返し予定 ---'
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+
+insert into t_ctx
+select 'weekly', public.create_event(jsonb_build_object(
+  'calendar_id', (select v from t_ctx where k = 'cal'),
+  'title', 'ピアノ教室',
+  'all_day', false,
+  'starts_at', '2026-09-01T07:00:00Z',   -- JST 16:00
+  'ends_at',   '2026-09-01T08:00:00Z',
+  'rrule', 'FREQ=WEEKLY;BYDAY=TU',
+  'assignees', jsonb_build_array((select v from t_ctx where k = 'child'))
+))::text;
+
+select pg_temp.expect(
+  (select rrule from public.events
+   where id = (select v from t_ctx where k = 'weekly')::uuid) = 'FREQ=WEEKLY;BYDAY=TU',
+  '繰り返しルールを付けて登録できる'
+);
+
+-- でたらめなルールは弾く
+do $$
+begin
+  begin
+    perform public.create_event(jsonb_build_object(
+      'calendar_id', (select v from t_ctx where k = 'cal'),
+      'title', '変なルール', 'all_day', true,
+      'start_date', '2026-09-01', 'end_date', '2026-09-01',
+      'rrule', 'DROP TABLE events',
+      'assignees', jsonb_build_array((select v from t_ctx where k = 'child'))));
+    raise exception 'FAILED: でたらめな繰り返しルールが通った';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   でたらめな繰り返しルールは弾く';
+  end;
+end
+$$;
+
+-- この回だけ削除（FR-R06）。元の予定とルールは残る
+select public.delete_event(
+  (select v from t_ctx where k = 'weekly')::uuid, 'one', '2026-09-15');
+
+select pg_temp.expect(
+  (select count(*) from public.event_exceptions
+   where event_id = (select v from t_ctx where k = 'weekly')::uuid
+     and occurrence_date = '2026-09-15') = 1,
+  'この回だけ削除すると、休む回が1つ記録される'
+);
+select pg_temp.expect(
+  (select deleted_at is null and rrule = 'FREQ=WEEKLY;BYDAY=TU'
+   from public.events where id = (select v from t_ctx where k = 'weekly')::uuid),
+  '元の予定とルールは変わらない（他の回に影響しない）'
+);
+
+-- これ以降を削除（FR-R07）。ルールが前日で打ち切られる
+select public.delete_event(
+  (select v from t_ctx where k = 'weekly')::uuid, 'following', '2026-10-06');
+
+select pg_temp.expect(
+  (select rrule from public.events
+   where id = (select v from t_ctx where k = 'weekly')::uuid)
+    = 'FREQ=WEEKLY;BYDAY=TU;UNTIL=20261005T000000Z',
+  'これ以降を削除すると、前日までで終わるルールになる'
+);
+select pg_temp.expect(
+  (select deleted_at is null from public.events
+   where id = (select v from t_ctx where k = 'weekly')::uuid),
+  'これ以降を削除しても、予定そのものは消えない'
+);
+
+-- 1回目より前を指定した「これ以降」は、まるごと削除になる
+insert into t_ctx
+select 'weekly2', public.create_event(jsonb_build_object(
+  'calendar_id', (select v from t_ctx where k = 'cal'),
+  'title', '体操教室', 'all_day', true,
+  'start_date', '2026-09-07', 'end_date', '2026-09-07',
+  'rrule', 'FREQ=WEEKLY',
+  'assignees', jsonb_build_array((select v from t_ctx where k = 'child'))
+))::text;
+
+select public.delete_event(
+  (select v from t_ctx where k = 'weekly2')::uuid, 'following', '2026-09-07');
+-- 消えた予定は RLS で見えなくなるので、件数で確かめる
+select pg_temp.expect(
+  (select count(*) from public.events
+   where id = (select v from t_ctx where k = 'weekly2')::uuid) = 0,
+  '1回目から「これ以降」を消すと、予定ごと消える'
+);
+
+-- この回だけ編集（FR-R05）。休みが1つ増え、その日の単発予定ができる
+insert into t_ctx
+select 'weekly3', public.create_event(jsonb_build_object(
+  'calendar_id', (select v from t_ctx where k = 'cal'),
+  'title', 'スイミング', 'all_day', true,
+  'start_date', '2026-09-03', 'end_date', '2026-09-03',
+  'rrule', 'FREQ=WEEKLY',
+  'assignees', jsonb_build_array((select v from t_ctx where k = 'child'))
+))::text;
+
+select public.update_event(
+  (select v from t_ctx where k = 'weekly3')::uuid,
+  jsonb_build_object(
+    'calendar_id', (select v from t_ctx where k = 'cal'),
+    'title', 'スイミング（振替）', 'all_day', true,
+    'start_date', '2026-09-18', 'end_date', '2026-09-18',
+    'assignees', jsonb_build_array((select v from t_ctx where k = 'child'))),
+  'one', '2026-09-17');
+
+select pg_temp.expect(
+  (select count(*) from public.event_exceptions
+   where event_id = (select v from t_ctx where k = 'weekly3')::uuid
+     and occurrence_date = '2026-09-17') = 1,
+  'この回だけ編集すると、元の回は休みになる'
+);
+select pg_temp.expect(
+  (select count(*) from public.events
+   where title = 'スイミング（振替）' and rrule is null
+     and start_date = '2026-09-18') = 1,
+  '振替ぶんは、繰り返しの付かない単発の予定として入る'
+);
+select pg_temp.expect(
+  (select rrule from public.events
+   where id = (select v from t_ctx where k = 'weekly3')::uuid) = 'FREQ=WEEKLY',
+  '元の繰り返しはそのまま残る'
+);
+reset role;
+
+-- 別の家族からは、休む回も見えない
+select pg_temp.login_as('22222222-2222-2222-2222-222222222222');
+select pg_temp.expect(
+  (select count(*) from public.event_exceptions) = 0,
+  '別の家族からは、休む回も見えない'
+);
+reset role;
+
 rollback;
 
 \echo ''

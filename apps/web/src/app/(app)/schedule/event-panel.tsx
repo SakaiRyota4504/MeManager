@@ -6,7 +6,18 @@ import type { Member } from "@/lib/supabase/types";
 import type { EventWithAssignees } from "@/lib/calendar/model";
 import { eventDateKey, formatTime } from "@/lib/calendar/date";
 import { Field, FormError, SubmitButton } from "@/components/form";
+import { fromRRule, type Recurrence } from "@/lib/recurrence/rule";
+import { RecurrenceField } from "./recurrence-field";
 import { createEvent, updateEvent, type EventFormState } from "./actions";
+
+/** 繰り返し予定を直すとき、どこまでを変えるか（FR-R07） */
+type Scope = "one" | "following" | "all";
+
+const SCOPES: { id: Scope; label: string }[] = [
+  { id: "one", label: "この回のみ" },
+  { id: "following", label: "これ以降" },
+  { id: "all", label: "すべて" },
+];
 
 type Initial =
   | { mode: "create"; date: string; startTime?: string; endTime?: string }
@@ -35,6 +46,15 @@ export function EventPanel({
   );
 
   const [allDay, setAllDay] = useState(editing?.all_day ?? false);
+  const [recurrence, setRecurrence] = useState<Recurrence | null>(() =>
+    fromRRule(editing?.rrule),
+  );
+
+  // 繰り返しの1回ぶんを開いたときだけ、範囲を聞く。
+  // 既定は「この回のみ」。いちばん影響が小さく、押し間違えても被害が少ない。
+  const occurrence = editing?.occurrence ?? null;
+  const isSeries = Boolean(editing?.rrule && occurrence);
+  const [scope, setScope] = useState<Scope>("one");
 
   // 開始・終了は常に出す。既定は「押した日」で、時刻は 9:00〜10:00。
   const touched = initial.mode === "create" ? initial.date : "";
@@ -240,6 +260,51 @@ export function EventPanel({
               name="calendar_id"
               value={editing?.calendar_id ?? defaultCalendarId}
             />
+
+            {isSeries && (
+              <div className="space-y-1.5 rounded-md border border-accent/40 bg-accent/5 p-3">
+                <span className="text-sm font-medium">変更する範囲</span>
+                <div className="flex gap-1.5">
+                  {SCOPES.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      aria-pressed={scope === s.id}
+                      onClick={() => setScope(s.id)}
+                      className={`flex-1 rounded-md border px-2 py-1.5 text-xs ${
+                        scope === s.id
+                          ? "border-transparent bg-accent text-accent-fg"
+                          : "border-border-strong"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted">
+                  {scope === "one"
+                    ? "この日の分だけ変えます。他の回はそのままです。"
+                    : scope === "following"
+                      ? "この日から先を変えます。前の回はそのままです。"
+                      : "すべての回を変えます。"}
+                </p>
+                <input type="hidden" name="scope" value={scope} />
+                <input
+                  type="hidden"
+                  name="occurrence"
+                  value={occurrence ?? ""}
+                />
+              </div>
+            )}
+
+            {/* この回だけ直すときは、1回きりの予定になるので繰り返しは聞かない */}
+            {!(isSeries && scope === "one") && (
+              <RecurrenceField
+                value={recurrence}
+                startDate={startDate}
+                onChange={setRecurrence}
+              />
+            )}
 
             <label className="block space-y-1.5">
               <span className="text-sm font-medium">状態</span>

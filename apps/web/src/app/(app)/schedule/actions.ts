@@ -16,6 +16,7 @@ function toJapaneseMessage(message: string): string {
   if (/INVALID_PERIOD/.test(message)) {
     return "日時の指定が正しくありません。終了は開始より後にしてください";
   }
+  if (/INVALID_RRULE/.test(message)) return "繰り返しの指定が正しくありません";
   if (/CALENDAR_NOT_FOUND/.test(message))
     return "そのカレンダーには書き込めません";
   if (/EVENT_NOT_FOUND/.test(message)) return "その予定は見つかりません";
@@ -32,6 +33,7 @@ function buildPayload(formData: FormData) {
 
   const base: Record<string, unknown> = {
     calendar_id: String(formData.get("calendar_id") ?? ""),
+    rrule: String(formData.get("rrule") ?? ""),
     title: String(formData.get("title") ?? "").trim(),
     location: String(formData.get("location") ?? "").trim(),
     description: String(formData.get("description") ?? "").trim(),
@@ -80,6 +82,21 @@ export async function createEvent(
   return { ok: true };
 }
 
+/** 繰り返し予定を直すとき、どこまでを変えるか（FR-R07） */
+function readScope(formData: FormData): {
+  scope: string;
+  occurrence: string | null;
+} {
+  const scope = String(formData.get("scope") ?? "all");
+  const occurrence = String(formData.get("occurrence") ?? "");
+  const valid = ["one", "following", "all"].includes(scope);
+
+  // 回を名指しできないなら「すべて」しかない。
+  // 指定を信じて片方だけ効かせると、思わぬ回が消える。
+  if (!valid || !occurrence) return { scope: "all", occurrence: null };
+  return { scope, occurrence };
+}
+
 export async function updateEvent(
   _prev: EventFormState,
   formData: FormData,
@@ -91,10 +108,14 @@ export async function updateEvent(
   const invalid = validate(payload);
   if (invalid) return { error: invalid };
 
+  const { scope, occurrence } = readScope(formData);
+
   const supabase = await createClient();
   const { error } = await supabase.rpc("update_event", {
     target_event_id: eventId,
     payload,
+    scope,
+    occurrence,
   });
   if (error) return { error: toJapaneseMessage(error.message) };
 
@@ -109,9 +130,13 @@ export async function deleteEvent(
   const eventId = String(formData.get("event_id") ?? "");
   if (!eventId) return { error: "予定が特定できません" };
 
+  const { scope, occurrence } = readScope(formData);
+
   const supabase = await createClient();
   const { error } = await supabase.rpc("delete_event", {
     target_event_id: eventId,
+    scope,
+    occurrence,
   });
   if (error) return { error: toJapaneseMessage(error.message) };
 

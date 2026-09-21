@@ -1,7 +1,15 @@
 import type { CalendarEvent, Member } from "@/lib/supabase/types";
 import { allDayKeys, eventDateKey } from "./date";
 
-export type EventWithAssignees = CalendarEvent & { assignees: string[] };
+export type EventWithAssignees = CalendarEvent & {
+  assignees: string[];
+  /**
+   * 繰り返し予定を1回ぶんに展開したときの、その日付。
+   * 1回きりの予定では null。
+   * 「この回だけ消す」のように、回を名指しするときに使う。
+   */
+  occurrence?: string | null;
+};
 
 /** 日付ごとに予定をまとめる。複数日にまたがる終日予定は各日に出す。 */
 export function groupByDate(

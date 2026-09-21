@@ -145,8 +145,8 @@ memanager/
 │  │  ├─ lib/
 │  │  │  ├─ nav/            … 機能の一覧。メニューはここから作る
 │  │  │  ├─ supabase/       … クライアント生成、型定義
-│  │  │  ├─ calendar/       … 日付の計算
-│  │  │  ├─ recurrence/     … 繰り返し予定の展開（これから）
+│  │  │  ├─ calendar/       … 日付の計算、予定の組み立て
+│  │  │  ├─ recurrence/     … 繰り返しの展開（予定のことは知らない）
 │  │  │  └─ import/         … ics / CSV の解析（これから）
 │  │  └─ proxy.ts           … セッション更新（Next.js 16 で middleware から改名）
 │  └─ desktop/              … Tauri（Rust）のシェルとネイティブ機能（これから）

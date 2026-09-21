@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 
 import type { Member } from "@/lib/supabase/types";
 import type { EventWithAssignees } from "@/lib/calendar/model";
 import { eventDateKey, formatTime } from "@/lib/calendar/date";
+import { describeRecurrence, fromRRule } from "@/lib/recurrence/rule";
 import { deleteEvent, type EventFormState } from "./actions";
 
 const STATUS_LABEL = {
@@ -48,6 +49,11 @@ export function EventDetail({
   }, [onClose]);
 
   const assignees = members.filter((m) => event.assignees.includes(m.id));
+  const [confirming, setConfirming] = useState(false);
+
+  // 繰り返しの1回ぶんなら、消す範囲を聞く必要がある（FR-R07）
+  const recurrence = fromRRule(event.rrule);
+  const isSeries = Boolean(recurrence && event.occurrence);
 
   const when = event.all_day
     ? event.start_date === event.end_date
@@ -103,6 +109,20 @@ export function EventDetail({
               ))}
             </dd>
 
+            {recurrence && (
+              <>
+                <dt className="text-muted">繰り返し</dt>
+                <dd>
+                  {describeRecurrence(
+                    recurrence,
+                    event.occurrence ??
+                      event.start_date ??
+                      eventDateKey(event.starts_at!, event.timezone),
+                  )}
+                </dd>
+              </>
+            )}
+
             <dt className="text-muted">状態</dt>
             <dd>{STATUS_LABEL[event.status]}</dd>
 
@@ -127,21 +147,103 @@ export function EventDetail({
           )}
         </div>
 
-        <div className="flex gap-2 border-t border-border px-4 py-3">
-          <form action={formAction} className="flex-1">
-            <input type="hidden" name="event_id" value={event.id} />
-            <DeleteButton />
-          </form>
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex-1 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-fg"
-          >
-            編集
-          </button>
-        </div>
+        {confirming ? (
+          <div className="space-y-2 border-t border-border px-4 py-3">
+            <p className="text-xs text-muted">
+              繰り返しの予定です。どこまで消しますか。
+            </p>
+            <div className="flex gap-1.5">
+              {/* 範囲ごとにフォームを分けてある。押したボタンで値が決まるので、
+                  取り違えて別の回まで消えることがない。 */}
+              <DeleteScope
+                action={formAction}
+                event={event}
+                scope="one"
+                label="この回のみ"
+              />
+              <DeleteScope
+                action={formAction}
+                event={event}
+                scope="following"
+                label="これ以降"
+              />
+              <DeleteScope
+                action={formAction}
+                event={event}
+                scope="all"
+                label="すべて"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="w-full rounded-md border border-border-strong px-4 py-1.5 text-sm"
+            >
+              やめる
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2 border-t border-border px-4 py-3">
+            {isSeries ? (
+              <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                className="flex-1 rounded-md border border-border-strong px-4 py-2 text-sm text-red-600"
+              >
+                削除
+              </button>
+            ) : (
+              <form action={formAction} className="flex-1">
+                <input type="hidden" name="event_id" value={event.id} />
+                <DeleteButton />
+              </form>
+            )}
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex-1 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-fg"
+            >
+              編集
+            </button>
+          </div>
+        )}
       </section>
     </>
+  );
+}
+
+/** 範囲を1つだけ持つ削除ボタン。フォームごと分けてある */
+function DeleteScope({
+  action,
+  event,
+  scope,
+  label,
+}: {
+  action: (formData: FormData) => void;
+  event: EventWithAssignees;
+  scope: string;
+  label: string;
+}) {
+  return (
+    <form action={action} className="flex-1">
+      <input type="hidden" name="event_id" value={event.id} />
+      <input type="hidden" name="scope" value={scope} />
+      <input type="hidden" name="occurrence" value={event.occurrence ?? ""} />
+      <ScopeButton label={label} />
+    </form>
+  );
+}
+
+function ScopeButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="w-full rounded-md border border-border-strong px-2 py-2 text-xs text-red-600 disabled:opacity-50"
+    >
+      {pending ? "…" : label}
+    </button>
   );
 }
 

@@ -52,6 +52,8 @@ export type CalendarEvent = {
   timezone: string;
   color: string | null;
   status: EventStatus;
+  /** 繰り返しルール（RFC 5545 の RRULE）。null なら1回きり */
+  rrule: string | null;
   created_by: string | null;
   deleted_at: string | null;
 } & Timestamps;
@@ -59,6 +61,13 @@ export type CalendarEvent = {
 export type EventAssignee = {
   event_id: string;
   member_id: string;
+};
+
+/** 繰り返し予定のうち、出さない回 */
+export type EventException = {
+  event_id: string;
+  occurrence_date: string;
+  created_at: string;
 };
 
 export type UserPreferences = {
@@ -129,6 +138,20 @@ export type Database = {
         Update: Partial<UserPreferences>;
         Relationships: [];
       };
+      event_exceptions: {
+        Row: EventException;
+        Insert: Pick<EventException, "event_id" | "occurrence_date">;
+        Update: Partial<EventException>;
+        Relationships: [
+          {
+            foreignKeyName: "event_exceptions_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       calendars: {
         Row: Calendar;
         Insert: Partial<Calendar> & Pick<Calendar, "family_id" | "name">;
@@ -143,11 +166,20 @@ export type Database = {
         Returns: string;
       };
       update_event: {
-        Args: { target_event_id: string; payload: Record<string, unknown> };
+        Args: {
+          target_event_id: string;
+          payload: Record<string, unknown>;
+          scope?: string;
+          occurrence?: string | null;
+        };
         Returns: void;
       };
       delete_event: {
-        Args: { target_event_id: string };
+        Args: {
+          target_event_id: string;
+          scope?: string;
+          occurrence?: string | null;
+        };
         Returns: void;
       };
       restore_event: {

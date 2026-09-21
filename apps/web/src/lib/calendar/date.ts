@@ -61,6 +61,12 @@ export function fromDateKey(key: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
+/** 2つの日付が何日離れているか。時間帯に左右されないよう UTC で数える */
+export function daysBetween(from: string, to: string): number {
+  const ms = Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`);
+  return Math.round(ms / 86_400_000);
+}
+
 export function shiftDays(key: string, delta: number): string {
   const d = fromDateKey(key);
   return toDateKey(

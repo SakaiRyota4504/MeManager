@@ -171,7 +171,7 @@ export function WeekView({
                 const width = 100 / box.lanes;
                 return (
                   <button
-                    key={box.event.id}
+                    key={`${box.event.id}-${box.event.occurrence ?? day}`}
                     type="button"
                     className={`wk-ev ${
                       box.event.status === "cancelled" ? "is-cancelled" : ""
