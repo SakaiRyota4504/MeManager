@@ -172,6 +172,14 @@ export type CategoryStatus = {
   uses: number;
 };
 
+/** budget_trend() が返す1行。月ごとの合計 */
+export type TrendPoint = {
+  /** その月の1日 */
+  month: string;
+  expense: number;
+  income: number;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -347,6 +355,18 @@ export type Database = {
       budget_status: {
         Args: { target_month?: string | null };
         Returns: CategoryStatus[];
+      };
+      budget_trend: {
+        Args: { target_month?: string | null; months?: number };
+        Returns: { month: string; expense: number; income: number }[];
+      };
+      total_budget: {
+        Args: { target_month?: string | null };
+        Returns: number | null;
+      };
+      effective_budget: {
+        Args: { target_category_id: string | null; target_month: string };
+        Returns: number | null;
       };
       create_transaction: {
         Args: { payload: Record<string, unknown> };

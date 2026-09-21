@@ -25,6 +25,7 @@ function toJapaneseMessage(message: string): string {
 function refresh(): void {
   revalidatePath("/budget");
   revalidatePath("/budget/list");
+  revalidatePath("/budget/summary");
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +172,34 @@ export async function updateCategory(
   }
 
   revalidatePath("/settings/categories");
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * 費目を決めない「全体の予算」（FR-B34）。
+ *
+ * 費目ごとの予算を足した額とは別に持つ。
+ * 「食費は7万」と「ひと月に25万まで」は別の決めごとで、
+ * 一致させようとすると、費目を1つ足すたびに全体を直すことになる。
+ */
+export async function setTotalBudget(
+  _prev: BudgetFormState,
+  formData: FormData,
+): Promise<BudgetFormState> {
+  const month = String(formData.get("month") ?? "");
+  const amount = parseAmount(String(formData.get("budget") ?? ""));
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_budget", {
+    target_category_id: null,
+    target_month: isMonthKey(month) ? monthFirstDay(month) : null,
+    new_amount: amount,
+  });
+  if (error) return { error: toJapaneseMessage(error.message) };
+
+  revalidatePath("/settings/categories");
+  revalidatePath("/budget/summary");
   refresh();
   return { ok: true };
 }

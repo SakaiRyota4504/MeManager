@@ -61,7 +61,7 @@ export const FEATURES: Feature[] = [
     screens: [
       { label: "入力", href: "/budget" },
       { label: "一覧", href: "/budget/list" },
-      { label: "集計", href: "/budget/summary", ready: false },
+      { label: "集計", href: "/budget/summary" },
     ],
   },
   {

@@ -1353,6 +1353,104 @@ select pg_temp.expect(
 );
 reset role;
 
+-- ===========================================================================
+\echo '--- 17. 集計と予算（B2） ---'
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+
+insert into t_ctx
+select 'this_month',
+  date_trunc('month', (now() at time zone 'Asia/Tokyo')::date)::date::text;
+insert into t_ctx
+select 'last_month',
+  (date_trunc('month', (now() at time zone 'Asia/Tokyo')::date)
+   - interval '1 month')::date::text;
+
+-- 先月に決めた予算は、今月も効く（FR-B33）
+select public.set_budget(
+  (select v from t_ctx where k = 'cat_pay')::uuid,   -- 収入の費目を借りる
+  (select v from t_ctx where k = 'last_month')::date, 12345);
+
+select pg_temp.expect(
+  (select budget from public.budget_status(
+     (select v from t_ctx where k = 'this_month')::date)
+   where category_id = (select v from t_ctx where k = 'cat_pay')::uuid) = 12345,
+  '先月に決めた予算が、決めていない今月にも効く'
+);
+
+-- 今月ぶんを決め直したら、そちらが勝つ
+select public.set_budget(
+  (select v from t_ctx where k = 'cat_pay')::uuid,
+  (select v from t_ctx where k = 'this_month')::date, 500);
+
+select pg_temp.expect(
+  (select budget from public.budget_status(
+     (select v from t_ctx where k = 'this_month')::date)
+   where category_id = (select v from t_ctx where k = 'cat_pay')::uuid) = 500
+  and (select budget from public.budget_status(
+     (select v from t_ctx where k = 'last_month')::date)
+   where category_id = (select v from t_ctx where k = 'cat_pay')::uuid) = 12345,
+  '今月ぶんを決め直しても、先月の額は変わらない'
+);
+
+-- 決める前の月まで遡らない
+select pg_temp.expect(
+  (select budget from public.budget_status(
+     (date_trunc('month', (now() at time zone 'Asia/Tokyo')::date)
+      - interval '2 months')::date)
+   where category_id = (select v from t_ctx where k = 'cat_pay')::uuid) is null,
+  '決めるより前の月には、予算が無いままになる'
+);
+
+-- 全体の予算（FR-B34）。費目ごとの予算とは別に持つ
+select public.set_budget(null, null, 250000);
+select pg_temp.expect(
+  public.total_budget(null) = 250000,
+  '費目を決めない「全体の予算」を持てる'
+);
+select pg_temp.expect(
+  not exists (
+    select 1 from public.budget_status(null) where budget = 250000
+  ),
+  '全体の予算は、どの費目の予算にも混ざらない'
+);
+
+-- 月ごとの推移（FR-B44）
+select pg_temp.expect(
+  (select count(*) from public.budget_trend(null, 12)) = 12,
+  '記録の無い月も含めて、12か月ぶんが返る'
+);
+select pg_temp.expect(
+  (select expense from public.budget_trend(null, 12)
+   where month = (select v from t_ctx where k = 'this_month')::date) = 4280
+  and (select income from public.budget_trend(null, 12)
+       where month = (select v from t_ctx where k = 'this_month')::date) = 420000,
+  '月ごとに、支出と収入が分かれて返る'
+);
+select pg_temp.expect(
+  (select expense from public.budget_trend(null, 12)
+   where month = (select v from t_ctx where k = 'last_month')::date) = 9999,
+  '先月の記録は先月の行に入る'
+);
+select pg_temp.expect(
+  (select count(*) from public.budget_trend(null, 999)) = 36,
+  '長すぎる指定は36か月で止まる'
+);
+reset role;
+
+-- 別の家族からは、集計にも出てこない（AC-B06）
+select pg_temp.login_as('22222222-2222-2222-2222-222222222222');
+select pg_temp.expect(
+  (select coalesce(sum(expense) + sum(income), 0)
+   from public.budget_trend(null, 12)) = 0,
+  '別の家族の記録は、推移に出てこない'
+);
+select pg_temp.expect(
+  public.total_budget(null) is null,
+  '別の家族の全体予算は見えない'
+);
+reset role;
+
 rollback;
 
 \echo ''

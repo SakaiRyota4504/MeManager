@@ -31,21 +31,28 @@ export function LevelPill({ level }: { level: Level }) {
   );
 }
 
-/** 使った割合。太らせない。6px の細い帯にする */
+/**
+ * 割合の帯。太らせない。6px の細い帯にする。
+ *
+ * 何に対する割合かは呼ぶ側が決める（予算だったり、月の合計だったり）。
+ * 読み上げの文もそこから作るので、`label` を必ず渡す。
+ */
 export function Meter({
   used,
   budget,
   level,
+  label = "予算",
 }: {
   used: number;
   budget: number | null;
   level: Level;
+  label?: string;
 }) {
   const percent = usedPercent(used, budget);
   return (
     <span
       role="img"
-      aria-label={`予算 ${formatYen(budget ?? 0)}円 の ${percent}%`}
+      aria-label={`${label} ${formatYen(budget ?? 0)}円 の ${percent}%`}
       className="block h-1.5 overflow-hidden rounded-full bg-border"
     >
       <span

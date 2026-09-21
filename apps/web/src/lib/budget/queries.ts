@@ -1,7 +1,11 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { CategoryStatus, Transaction } from "@/lib/supabase/types";
+import type {
+  CategoryStatus,
+  Transaction,
+  TrendPoint,
+} from "@/lib/supabase/types";
 import { monthFirstDay } from "@/lib/budget/month";
 
 /** 一覧に出す1件。費目の名前と色を一緒に引く */
@@ -73,4 +77,26 @@ export async function fetchDefaultMemberId(
     .maybeSingle();
 
   return data?.member_id ?? selfMemberId;
+}
+
+/** 月ごとの合計（FR-B44）。記録そのものは持ってこない */
+export async function fetchTrend(
+  month: string,
+  months = 12,
+): Promise<TrendPoint[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("budget_trend", {
+    target_month: monthFirstDay(month),
+    months,
+  });
+  return data ?? [];
+}
+
+/** 費目を決めない「全体の予算」（FR-B34）。決めていなければ null */
+export async function fetchTotalBudget(month: string): Promise<number | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("total_budget", {
+    target_month: monthFirstDay(month),
+  });
+  return data ?? null;
 }
