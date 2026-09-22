@@ -174,6 +174,39 @@ export type CategoryStatus = {
   uses: number;
 };
 
+/** 習慣の頻度の種類。schedule=曜日で決める / count=期間内に何回 */
+export type HabitKind = "schedule" | "count";
+export type HabitPeriod = "week" | "month";
+export type HabitVisibility = "family" | "private";
+
+/** 続けたいこと。予定とは別に持つ（00-product-vision.md 4.4） */
+export type Habit = {
+  id: string;
+  family_id: string;
+  /** 担当は1人（FR-H02） */
+  member_id: string;
+  name: string;
+  color: string;
+  kind: HabitKind;
+  /** kind = "schedule" のとき。スケジュールと同じ RRULE */
+  rrule: string | null;
+  /** kind = "count" のとき */
+  target_count: number | null;
+  period: HabitPeriod | null;
+  /** "private" は本人だけ。記録も見えない */
+  visibility: HabitVisibility;
+  is_active: boolean;
+  created_by: string | null;
+} & Timestamps;
+
+/** やった日。できなかった日の行は作らない */
+export type HabitLog = {
+  habit_id: string;
+  done_on: string;
+  created_by: string | null;
+  created_at: string;
+};
+
 /** 毎月決まって出ていくもの。自動では記録に入れない（FR-B22） */
 export type RecurringExpense = {
   id: string;
@@ -312,6 +345,27 @@ export type Database = {
           },
         ];
       };
+      habits: {
+        Row: Habit;
+        Insert: Partial<Habit> &
+          Pick<Habit, "family_id" | "member_id" | "name">;
+        Update: Partial<Habit>;
+        Relationships: [];
+      };
+      habit_logs: {
+        Row: HabitLog;
+        Insert: Pick<HabitLog, "habit_id" | "done_on">;
+        Update: Partial<HabitLog>;
+        Relationships: [
+          {
+            foreignKeyName: "habit_logs_habit_id_fkey";
+            columns: ["habit_id"];
+            isOneToOne: false;
+            referencedRelation: "habits";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       recurring_expenses: {
         Row: RecurringExpense;
         Insert: Partial<RecurringExpense> &
@@ -384,6 +438,22 @@ export type Database = {
       budget_status: {
         Args: { target_month?: string | null };
         Returns: CategoryStatus[];
+      };
+      create_habit: {
+        Args: { payload: Record<string, unknown> };
+        Returns: string;
+      };
+      update_habit: {
+        Args: { target_habit_id: string; payload: Record<string, unknown> };
+        Returns: void;
+      };
+      toggle_habit_log: {
+        Args: { target_habit_id: string; target_date?: string | null };
+        Returns: boolean;
+      };
+      habit_logs_between: {
+        Args: { from_date: string; to_date: string };
+        Returns: { habit_id: string; done_on: string }[];
       };
       create_recurring_expense: {
         Args: { payload: Record<string, unknown> };

@@ -45,10 +45,12 @@ export const FEATURES: Feature[] = [
     id: "habits",
     label: "習慣",
     href: "/habits",
-    ready: false,
+    ready: true,
+    // 毎日開くのは「今日」。登録は設定の中に置く
+    // （docs/08-habit-requirements.md 6章）
     screens: [
       { label: "今日", href: "/habits" },
-      { label: "記録", href: "/habits/log" },
+      { label: "記録", href: "/habits/log", ready: false },
     ],
   },
   {
@@ -84,6 +86,7 @@ export const FEATURES: Feature[] = [
       { label: "メンバー", href: "/settings/members" },
       { label: "費目", href: "/settings/categories" },
       { label: "固定費", href: "/settings/recurring" },
+      { label: "習慣", href: "/settings/habits" },
       { label: "取り込み", href: "/settings/import" },
     ],
   },

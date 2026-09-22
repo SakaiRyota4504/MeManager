@@ -1643,6 +1643,235 @@ end
 $$;
 reset role;
 
+-- ===========================================================================
+\echo '--- 19. 習慣（H1） ---'
+
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+
+-- 曜日で決める習慣
+insert into t_ctx
+select 'brush', public.create_habit(jsonb_build_object(
+  'name', '歯みがき',
+  'member_id', (select v from t_ctx where k = 'child'),
+  'rrule', 'FREQ=DAILY'))::text;
+
+select pg_temp.expect(
+  (select kind from public.habits
+   where id = (select v from t_ctx where k = 'brush')::uuid) = 'schedule',
+  '曜日で決める習慣を登録できる'
+);
+
+-- 回数で決める習慣（RRULE では表せないもの）
+insert into t_ctx
+select 'run', public.create_habit(jsonb_build_object(
+  'name', '走る', 'kind', 'count',
+  'target_count', 3, 'period', 'week'))::text;
+
+select pg_temp.expect(
+  (select target_count from public.habits
+   where id = (select v from t_ctx where k = 'run')::uuid) = 3
+  and (select rrule from public.habits
+       where id = (select v from t_ctx where k = 'run')::uuid) is null,
+  '回数で決める習慣は、rrule を持たない'
+);
+
+-- 種類に合わない組み合わせは入らない
+do $$
+begin
+  begin
+    perform public.create_habit(jsonb_build_object(
+      'name', '中途半端', 'kind', 'count'));
+    raise exception 'FAILED: 回数なしの「回数で決める」習慣が作れてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   回数を決めずに「回数で決める」習慣は作れない';
+  end;
+end
+$$;
+
+-- 押す・取り消す
+select pg_temp.expect(
+  public.toggle_habit_log((select v from t_ctx where k = 'brush')::uuid, null),
+  '押すと、やった日として残る'
+);
+select pg_temp.expect(
+  (select count(*) from public.habit_logs
+   where habit_id = (select v from t_ctx where k = 'brush')::uuid) = 1,
+  '記録が1件できる'
+);
+select pg_temp.expect(
+  not public.toggle_habit_log((select v from t_ctx where k = 'brush')::uuid, null),
+  'もう一度押すと取り消せる'
+);
+select pg_temp.expect(
+  (select count(*) from public.habit_logs
+   where habit_id = (select v from t_ctx where k = 'brush')::uuid) = 0,
+  '取り消すと記録が消える'
+);
+
+-- 1日2回は行として存在できない（3.4）
+select public.toggle_habit_log(
+  (select v from t_ctx where k = 'brush')::uuid, '2026-09-20');
+select public.toggle_habit_log(
+  (select v from t_ctx where k = 'brush')::uuid, '2026-09-19');
+select pg_temp.expect(
+  (select count(*) from public.habit_logs
+   where habit_id = (select v from t_ctx where k = 'brush')::uuid) = 2,
+  'さかのぼって押せる（押し忘れた日を埋められる）'
+);
+
+-- 未来は押せない（3.6）
+do $$
+begin
+  begin
+    perform public.toggle_habit_log(
+      (select v from t_ctx where k = 'brush')::uuid,
+      ((now() at time zone 'Asia/Tokyo')::date + 1));
+    raise exception 'FAILED: 未来の日が押せてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   これからの日は押せない';
+  end;
+end
+$$;
+
+-- 「自分だけ」の習慣
+insert into t_ctx
+select 'secret', public.create_habit(jsonb_build_object(
+  'name', '日記', 'rrule', 'FREQ=DAILY', 'visibility', 'private'))::text;
+select public.toggle_habit_log((select v from t_ctx where k = 'secret')::uuid, null);
+
+-- 他人の習慣に「自分だけ」は付けられない（本人から見えなくなるため）
+do $$
+begin
+  begin
+    perform public.create_habit(jsonb_build_object(
+      'name', '勝手に秘密', 'rrule', 'FREQ=DAILY',
+      'visibility', 'private',
+      'member_id', (select v from t_ctx where k = 'child')));
+    raise exception 'FAILED: 他人の習慣を自分だけにできてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   他人の習慣に「自分だけ」は付けられない';
+  end;
+end
+$$;
+
+-- テーブルに直接は書けない
+do $$
+begin
+  begin
+    insert into public.habits (family_id, member_id, name, rrule)
+    values ((select v from t_ctx where k = 'family_a')::uuid,
+            (select v from t_ctx where k = 'child')::uuid,
+            '勝手に', 'FREQ=DAILY');
+    raise exception 'FAILED: テーブルに直接書き込めてしまった';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok   習慣はテーブルに直接書き込めない';
+  end;
+end
+$$;
+reset role;
+
+-- 同じ家族からは見える。ただし「自分だけ」は見えない（AC-H03）
+select pg_temp.login_as('33333333-3333-3333-3333-333333333333');
+select pg_temp.expect(
+  (select count(*) from public.habits where name = '歯みがき') = 1,
+  '同じ家族の習慣は見える'
+);
+select pg_temp.expect(
+  (select count(*) from public.habits where name = '日記') = 0,
+  '「自分だけ」の習慣は、家族からも見えない'
+);
+select pg_temp.expect(
+  (select count(*) from public.habit_logs
+   where habit_id = (select v from t_ctx where k = 'secret')::uuid) = 0,
+  '「自分だけ」の習慣は、記録も見えない'
+);
+select pg_temp.expect(
+  (select count(*) from public.habit_logs
+   where habit_id = (select v from t_ctx where k = 'brush')::uuid) = 2,
+  '家族に見せている習慣の記録は見える'
+);
+
+-- 見えない習慣は押せない
+do $$
+begin
+  begin
+    perform public.toggle_habit_log(
+      (select v from t_ctx where k = 'secret')::uuid, null);
+    raise exception 'FAILED: 見えない習慣を押せてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   「自分だけ」の習慣は、家族からは押せない';
+  end;
+end
+$$;
+reset role;
+
+-- 別の家族からは、何も見えない
+select pg_temp.login_as('22222222-2222-2222-2222-222222222222');
+select pg_temp.expect(
+  (select count(*) from public.habits) = 0
+  and (select count(*) from public.habit_logs) = 0,
+  '別の家族からは、習慣も記録も見えない'
+);
+do $$
+begin
+  begin
+    perform public.toggle_habit_log(
+      (select v from t_ctx where k = 'brush')::uuid, null);
+    raise exception 'FAILED: 別の家族の習慣を押せてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   別の家族の習慣は押せない';
+  end;
+end
+$$;
+reset role;
+
+-- やめた習慣は押せない
+select pg_temp.login_as('11111111-1111-1111-1111-111111111111');
+select public.update_habit(
+  (select v from t_ctx where k = 'run')::uuid, '{"is_active": false}'::jsonb);
+do $$
+begin
+  begin
+    perform public.toggle_habit_log(
+      (select v from t_ctx where k = 'run')::uuid, null);
+    raise exception 'FAILED: やめた習慣を押せてしまった';
+  exception
+    when sqlstate 'P0001' then
+      if sqlerrm like 'FAILED%' then raise; end if;
+      raise notice '  ok   やめた習慣は押せない';
+  end;
+end
+$$;
+
+-- 種類を変えると、使わない列が消える
+select public.update_habit(
+  (select v from t_ctx where k = 'brush')::uuid,
+  '{"kind": "count", "target_count": 5, "period": "week"}'::jsonb);
+select pg_temp.expect(
+  (select rrule from public.habits
+   where id = (select v from t_ctx where k = 'brush')::uuid) is null
+  and (select target_count from public.habits
+       where id = (select v from t_ctx where k = 'brush')::uuid) = 5,
+  '頻度の種類を変えると、使わない列が残らない'
+);
+select pg_temp.expect(
+  (select count(*) from public.habit_logs
+   where habit_id = (select v from t_ctx where k = 'brush')::uuid) = 2,
+  '頻度を変えても、それまでの記録は動かない（FR-H05）'
+);
+reset role;
+
 rollback;
 
 \echo ''
