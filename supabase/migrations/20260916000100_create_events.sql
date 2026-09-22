@@ -8,7 +8,7 @@
 --
 -- 繰り返し（rrule）は Step 5、取り込み（external_key）は Step 6 で足す。
 
-create table public.events (
+create table if not exists public.events (
   id            uuid primary key default gen_random_uuid(),
   -- RLS の判定で calendars への結合を毎回起こさないよう、冗長に持つ。
   family_id     uuid not null references public.families (id) on delete cascade,
@@ -53,13 +53,13 @@ comment on table public.events is '1件の予定';
 comment on column public.events.ends_at is '排他的。この時刻は含まない';
 comment on column public.events.end_date is '包含的。この日を含む';
 
-create index events_family_starts_idx
+create index if not exists events_family_starts_idx
   on public.events (family_id, starts_at) where deleted_at is null;
-create index events_family_dates_idx
+create index if not exists events_family_dates_idx
   on public.events (family_id, start_date) where deleted_at is null;
-create index events_calendar_idx on public.events (calendar_id);
+create index if not exists events_calendar_idx on public.events (calendar_id);
 
-create table public.event_assignees (
+create table if not exists public.event_assignees (
   event_id  uuid not null references public.events (id) on delete cascade,
   member_id uuid not null references public.members (id) on delete cascade,
   primary key (event_id, member_id)
@@ -68,8 +68,9 @@ create table public.event_assignees (
 comment on table public.event_assignees is 'その予定が誰の予定か。1件につき1人以上';
 
 -- 「このメンバーの予定」を引くための索引
-create index event_assignees_member_idx on public.event_assignees (member_id, event_id);
+create index if not exists event_assignees_member_idx on public.event_assignees (member_id, event_id);
 
+drop trigger if exists events_set_updated_at on public.events;
 create trigger events_set_updated_at
   before update on public.events
   for each row execute function public.set_updated_at();
@@ -99,6 +100,7 @@ begin
 end;
 $$;
 
+drop trigger if exists event_assignees_keep_one on public.event_assignees;
 create trigger event_assignees_keep_one
   before delete on public.event_assignees
   for each row execute function public.prevent_last_assignee_removal();
@@ -128,6 +130,7 @@ as $$
   );
 $$;
 
+drop policy if exists events_select on public.events;
 create policy events_select on public.events
   for select to authenticated
   using (
@@ -136,6 +139,7 @@ create policy events_select on public.events
     and public.can_read_calendar(calendar_id)
   );
 
+drop policy if exists events_insert on public.events;
 create policy events_insert on public.events
   for insert to authenticated
   with check (
@@ -143,6 +147,7 @@ create policy events_insert on public.events
     and public.can_read_calendar(calendar_id)
   );
 
+drop policy if exists events_update on public.events;
 create policy events_update on public.events
   for update to authenticated
   using (
@@ -156,6 +161,7 @@ create policy events_update on public.events
 
 -- 物理削除はしない。消すときは deleted_at を入れる。
 
+drop policy if exists event_assignees_select on public.event_assignees;
 create policy event_assignees_select on public.event_assignees
   for select to authenticated
   using (
@@ -166,6 +172,7 @@ create policy event_assignees_select on public.event_assignees
               and public.can_read_calendar(e.calendar_id))
   );
 
+drop policy if exists event_assignees_write on public.event_assignees;
 create policy event_assignees_write on public.event_assignees
   for all to authenticated
   using (

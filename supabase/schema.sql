@@ -2,8 +2,15 @@
 -- supabase/bundle.sh が supabase/migrations/ から生成したもの。
 -- Supabase ダッシュボードの SQL Editor に貼り付けて実行する。
 -- 手で書き換えない。変更は migrations/ 側に加えて生成し直す。
+--
+-- **何度流しても同じ結果になる。**すでに入っているものは飛ばすので、
+-- 「どこまで実行したか」を覚えておく必要はない。
 
 begin;
+
+-- すでにあるものを飛ばすたびに出る案内を止める。
+-- 何十行も出ると、失敗したように見えてしまう。
+set local client_min_messages to warning;
 
 -- ===========================================================
 -- 20260914000000_create_families_and_members.sql
@@ -21,7 +28,7 @@ begin;
 -- テーブル
 -- ---------------------------------------------------------------------------
 
-create table public.families (
+create table if not exists public.families (
   id          uuid primary key default gen_random_uuid(),
   name        text not null check (char_length(name) between 1 and 100),
   -- 週の開始曜日。0=日曜。
@@ -32,7 +39,7 @@ create table public.families (
 
 comment on table public.families is 'データを共有する単位';
 
-create table public.members (
+create table if not exists public.members (
   id            uuid primary key default gen_random_uuid(),
   family_id     uuid not null references public.families (id) on delete cascade,
   -- ログインアカウント。アカウントを持たないメンバー（幼い子どもなど）は null。
@@ -54,10 +61,10 @@ create table public.members (
 comment on table public.members is '家族に属する人。ログインアカウントとは独立';
 comment on column public.members.user_id is 'null ならアカウント未紐付け。招待を受けた時点で紐付く';
 
-create index members_user_id_idx on public.members (user_id) where user_id is not null;
-create index members_family_id_idx on public.members (family_id);
+create index if not exists members_user_id_idx on public.members (user_id) where user_id is not null;
+create index if not exists members_family_id_idx on public.members (family_id);
 
-create table public.calendars (
+create table if not exists public.calendars (
   id               uuid primary key default gen_random_uuid(),
   family_id        uuid not null references public.families (id) on delete cascade,
   name             text not null check (char_length(name) between 1 and 50),
@@ -75,13 +82,13 @@ create table public.calendars (
 
 comment on table public.calendars is '予定をまとめる入れ物';
 
-create index calendars_family_id_idx on public.calendars (family_id);
+create index if not exists calendars_family_id_idx on public.calendars (family_id);
 
 -- 家族ごとに既定のカレンダーは1つだけ。
-create unique index calendars_one_default_per_family
+create unique index if not exists calendars_one_default_per_family
   on public.calendars (family_id) where is_default;
 
-create table public.invitations (
+create table if not exists public.invitations (
   id          uuid primary key default gen_random_uuid(),
   family_id   uuid not null references public.families (id) on delete cascade,
   -- トークンは平文で保存しない。発行時に一度だけ表示する。
@@ -97,7 +104,7 @@ create table public.invitations (
 comment on table public.invitations is '家族への招待リンク';
 comment on column public.invitations.token_hash is 'sha256 のハッシュ。平文は発行時のみ表示する';
 
-create index invitations_family_id_idx on public.invitations (family_id);
+create index if not exists invitations_family_id_idx on public.invitations (family_id);
 
 -- ---------------------------------------------------------------------------
 -- updated_at の自動更新
@@ -114,14 +121,17 @@ begin
 end;
 $$;
 
+drop trigger if exists families_set_updated_at on public.families;
 create trigger families_set_updated_at
   before update on public.families
   for each row execute function public.set_updated_at();
 
+drop trigger if exists members_set_updated_at on public.members;
 create trigger members_set_updated_at
   before update on public.members
   for each row execute function public.set_updated_at();
 
+drop trigger if exists calendars_set_updated_at on public.calendars;
 create trigger calendars_set_updated_at
   before update on public.calendars
   for each row execute function public.set_updated_at();
@@ -197,10 +207,12 @@ $$;
 
 alter table public.families enable row level security;
 
+drop policy if exists families_select on public.families;
 create policy families_select on public.families
   for select to authenticated
   using (id in (select public.my_family_ids()));
 
+drop policy if exists families_update on public.families;
 create policy families_update on public.families
   for update to authenticated
   using (public.is_family_admin(id))
@@ -215,15 +227,18 @@ create policy families_update on public.families
 
 alter table public.members enable row level security;
 
+drop policy if exists members_select on public.members;
 create policy members_select on public.members
   for select to authenticated
   using (family_id in (select public.my_family_ids()));
 
+drop policy if exists members_insert on public.members;
 create policy members_insert on public.members
   for insert to authenticated
   with check (public.is_family_admin(family_id));
 
 -- 管理者は全員を、本人は自分の行だけを更新できる。
+drop policy if exists members_update on public.members;
 create policy members_update on public.members
   for update to authenticated
   using (
@@ -243,6 +258,7 @@ create policy members_update on public.members
 
 alter table public.calendars enable row level security;
 
+drop policy if exists calendars_select on public.calendars;
 create policy calendars_select on public.calendars
   for select to authenticated
   using (
@@ -253,10 +269,12 @@ create policy calendars_select on public.calendars
     )
   );
 
+drop policy if exists calendars_insert on public.calendars;
 create policy calendars_insert on public.calendars
   for insert to authenticated
   with check (family_id in (select public.my_family_ids()));
 
+drop policy if exists calendars_update on public.calendars;
 create policy calendars_update on public.calendars
   for update to authenticated
   using (
@@ -268,6 +286,7 @@ create policy calendars_update on public.calendars
   )
   with check (family_id in (select public.my_family_ids()));
 
+drop policy if exists calendars_delete on public.calendars;
 create policy calendars_delete on public.calendars
   for delete to authenticated
   using (
@@ -286,14 +305,17 @@ create policy calendars_delete on public.calendars
 alter table public.invitations enable row level security;
 
 -- token_hash が見えても平文は復元できないが、一覧できるのは管理者だけにしておく。
+drop policy if exists invitations_select on public.invitations;
 create policy invitations_select on public.invitations
   for select to authenticated
   using (public.is_family_admin(family_id));
 
+drop policy if exists invitations_insert on public.invitations;
 create policy invitations_insert on public.invitations
   for insert to authenticated
   with check (public.is_family_admin(family_id));
 
+drop policy if exists invitations_delete on public.invitations;
 create policy invitations_delete on public.invitations
   for delete to authenticated
   using (public.is_family_admin(family_id));
@@ -448,6 +470,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
@@ -1345,7 +1368,7 @@ $$;
 --
 -- 繰り返し（rrule）は Step 5、取り込み（external_key）は Step 6 で足す。
 
-create table public.events (
+create table if not exists public.events (
   id            uuid primary key default gen_random_uuid(),
   -- RLS の判定で calendars への結合を毎回起こさないよう、冗長に持つ。
   family_id     uuid not null references public.families (id) on delete cascade,
@@ -1390,13 +1413,13 @@ comment on table public.events is '1件の予定';
 comment on column public.events.ends_at is '排他的。この時刻は含まない';
 comment on column public.events.end_date is '包含的。この日を含む';
 
-create index events_family_starts_idx
+create index if not exists events_family_starts_idx
   on public.events (family_id, starts_at) where deleted_at is null;
-create index events_family_dates_idx
+create index if not exists events_family_dates_idx
   on public.events (family_id, start_date) where deleted_at is null;
-create index events_calendar_idx on public.events (calendar_id);
+create index if not exists events_calendar_idx on public.events (calendar_id);
 
-create table public.event_assignees (
+create table if not exists public.event_assignees (
   event_id  uuid not null references public.events (id) on delete cascade,
   member_id uuid not null references public.members (id) on delete cascade,
   primary key (event_id, member_id)
@@ -1405,8 +1428,9 @@ create table public.event_assignees (
 comment on table public.event_assignees is 'その予定が誰の予定か。1件につき1人以上';
 
 -- 「このメンバーの予定」を引くための索引
-create index event_assignees_member_idx on public.event_assignees (member_id, event_id);
+create index if not exists event_assignees_member_idx on public.event_assignees (member_id, event_id);
 
+drop trigger if exists events_set_updated_at on public.events;
 create trigger events_set_updated_at
   before update on public.events
   for each row execute function public.set_updated_at();
@@ -1436,6 +1460,7 @@ begin
 end;
 $$;
 
+drop trigger if exists event_assignees_keep_one on public.event_assignees;
 create trigger event_assignees_keep_one
   before delete on public.event_assignees
   for each row execute function public.prevent_last_assignee_removal();
@@ -1465,6 +1490,7 @@ as $$
   );
 $$;
 
+drop policy if exists events_select on public.events;
 create policy events_select on public.events
   for select to authenticated
   using (
@@ -1473,6 +1499,7 @@ create policy events_select on public.events
     and public.can_read_calendar(calendar_id)
   );
 
+drop policy if exists events_insert on public.events;
 create policy events_insert on public.events
   for insert to authenticated
   with check (
@@ -1480,6 +1507,7 @@ create policy events_insert on public.events
     and public.can_read_calendar(calendar_id)
   );
 
+drop policy if exists events_update on public.events;
 create policy events_update on public.events
   for update to authenticated
   using (
@@ -1493,6 +1521,7 @@ create policy events_update on public.events
 
 -- 物理削除はしない。消すときは deleted_at を入れる。
 
+drop policy if exists event_assignees_select on public.event_assignees;
 create policy event_assignees_select on public.event_assignees
   for select to authenticated
   using (
@@ -1503,6 +1532,7 @@ create policy event_assignees_select on public.event_assignees
               and public.can_read_calendar(e.calendar_id))
   );
 
+drop policy if exists event_assignees_write on public.event_assignees;
 create policy event_assignees_write on public.event_assignees
   for all to authenticated
   using (

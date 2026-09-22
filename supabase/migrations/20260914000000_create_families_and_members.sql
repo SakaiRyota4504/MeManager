@@ -11,7 +11,7 @@
 -- テーブル
 -- ---------------------------------------------------------------------------
 
-create table public.families (
+create table if not exists public.families (
   id          uuid primary key default gen_random_uuid(),
   name        text not null check (char_length(name) between 1 and 100),
   -- 週の開始曜日。0=日曜。
@@ -22,7 +22,7 @@ create table public.families (
 
 comment on table public.families is 'データを共有する単位';
 
-create table public.members (
+create table if not exists public.members (
   id            uuid primary key default gen_random_uuid(),
   family_id     uuid not null references public.families (id) on delete cascade,
   -- ログインアカウント。アカウントを持たないメンバー（幼い子どもなど）は null。
@@ -44,10 +44,10 @@ create table public.members (
 comment on table public.members is '家族に属する人。ログインアカウントとは独立';
 comment on column public.members.user_id is 'null ならアカウント未紐付け。招待を受けた時点で紐付く';
 
-create index members_user_id_idx on public.members (user_id) where user_id is not null;
-create index members_family_id_idx on public.members (family_id);
+create index if not exists members_user_id_idx on public.members (user_id) where user_id is not null;
+create index if not exists members_family_id_idx on public.members (family_id);
 
-create table public.calendars (
+create table if not exists public.calendars (
   id               uuid primary key default gen_random_uuid(),
   family_id        uuid not null references public.families (id) on delete cascade,
   name             text not null check (char_length(name) between 1 and 50),
@@ -65,13 +65,13 @@ create table public.calendars (
 
 comment on table public.calendars is '予定をまとめる入れ物';
 
-create index calendars_family_id_idx on public.calendars (family_id);
+create index if not exists calendars_family_id_idx on public.calendars (family_id);
 
 -- 家族ごとに既定のカレンダーは1つだけ。
-create unique index calendars_one_default_per_family
+create unique index if not exists calendars_one_default_per_family
   on public.calendars (family_id) where is_default;
 
-create table public.invitations (
+create table if not exists public.invitations (
   id          uuid primary key default gen_random_uuid(),
   family_id   uuid not null references public.families (id) on delete cascade,
   -- トークンは平文で保存しない。発行時に一度だけ表示する。
@@ -87,7 +87,7 @@ create table public.invitations (
 comment on table public.invitations is '家族への招待リンク';
 comment on column public.invitations.token_hash is 'sha256 のハッシュ。平文は発行時のみ表示する';
 
-create index invitations_family_id_idx on public.invitations (family_id);
+create index if not exists invitations_family_id_idx on public.invitations (family_id);
 
 -- ---------------------------------------------------------------------------
 -- updated_at の自動更新
@@ -104,14 +104,17 @@ begin
 end;
 $$;
 
+drop trigger if exists families_set_updated_at on public.families;
 create trigger families_set_updated_at
   before update on public.families
   for each row execute function public.set_updated_at();
 
+drop trigger if exists members_set_updated_at on public.members;
 create trigger members_set_updated_at
   before update on public.members
   for each row execute function public.set_updated_at();
 
+drop trigger if exists calendars_set_updated_at on public.calendars;
 create trigger calendars_set_updated_at
   before update on public.calendars
   for each row execute function public.set_updated_at();

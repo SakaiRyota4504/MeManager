@@ -76,3 +76,6 @@ jobs:
 
       - name: マイグレーションと RLS を検証する
         run: supabase/tests/run.sh
+
+      - name: schema.sql を何度でも流し直せるか確認する
+        run: supabase/tests/rerun.sh

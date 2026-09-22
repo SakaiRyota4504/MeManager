@@ -66,10 +66,12 @@ $$;
 
 alter table public.families enable row level security;
 
+drop policy if exists families_select on public.families;
 create policy families_select on public.families
   for select to authenticated
   using (id in (select public.my_family_ids()));
 
+drop policy if exists families_update on public.families;
 create policy families_update on public.families
   for update to authenticated
   using (public.is_family_admin(id))
@@ -84,15 +86,18 @@ create policy families_update on public.families
 
 alter table public.members enable row level security;
 
+drop policy if exists members_select on public.members;
 create policy members_select on public.members
   for select to authenticated
   using (family_id in (select public.my_family_ids()));
 
+drop policy if exists members_insert on public.members;
 create policy members_insert on public.members
   for insert to authenticated
   with check (public.is_family_admin(family_id));
 
 -- 管理者は全員を、本人は自分の行だけを更新できる。
+drop policy if exists members_update on public.members;
 create policy members_update on public.members
   for update to authenticated
   using (
@@ -112,6 +117,7 @@ create policy members_update on public.members
 
 alter table public.calendars enable row level security;
 
+drop policy if exists calendars_select on public.calendars;
 create policy calendars_select on public.calendars
   for select to authenticated
   using (
@@ -122,10 +128,12 @@ create policy calendars_select on public.calendars
     )
   );
 
+drop policy if exists calendars_insert on public.calendars;
 create policy calendars_insert on public.calendars
   for insert to authenticated
   with check (family_id in (select public.my_family_ids()));
 
+drop policy if exists calendars_update on public.calendars;
 create policy calendars_update on public.calendars
   for update to authenticated
   using (
@@ -137,6 +145,7 @@ create policy calendars_update on public.calendars
   )
   with check (family_id in (select public.my_family_ids()));
 
+drop policy if exists calendars_delete on public.calendars;
 create policy calendars_delete on public.calendars
   for delete to authenticated
   using (
@@ -155,14 +164,17 @@ create policy calendars_delete on public.calendars
 alter table public.invitations enable row level security;
 
 -- token_hash が見えても平文は復元できないが、一覧できるのは管理者だけにしておく。
+drop policy if exists invitations_select on public.invitations;
 create policy invitations_select on public.invitations
   for select to authenticated
   using (public.is_family_admin(family_id));
 
+drop policy if exists invitations_insert on public.invitations;
 create policy invitations_insert on public.invitations
   for insert to authenticated
   with check (public.is_family_admin(family_id));
 
+drop policy if exists invitations_delete on public.invitations;
 create policy invitations_delete on public.invitations
   for delete to authenticated
   using (public.is_family_admin(family_id));
